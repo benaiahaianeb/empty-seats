@@ -17,9 +17,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{background:var(--bg)}
-  body{font-family:var(--body);color:var(--ink);background:
-    radial-gradient(1200px 500px at 70% -10%, #18244400 0%, #18244466 40%, transparent 70%), var(--bg);
-    min-height:100vh}
+  body{font-family:var(--body);color:var(--ink);background:var(--bg);min-height:100vh}
   .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
 
   header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
@@ -113,6 +111,7 @@
 
   .opennum{font-family:var(--mono);font-weight:600;font-size:19px;text-align:right}
   .opennum small{display:block;font-weight:400;font-size:9.5px;letter-spacing:.06em;color:var(--ink-faint)}
+  .opennum .mcap{display:none}
 
   .season{border-bottom:1px solid #1d2a4a;background:#101a33;padding:16px 20px 20px;display:none}
   .season.open{display:block}
@@ -129,9 +128,10 @@
   .mlab i{font-style:normal;font-family:var(--mono);font-size:8.5px;color:var(--ink-faint);display:block}
   .mval{font-family:var(--mono);font-size:11px;color:var(--ink)}
   .mval small{display:block;font-size:9px;color:var(--ink-faint)}
-  .season .legend{margin-top:12px;font-size:12px;color:var(--ink-faint)}
+  .mval .mdays{font-size:8px;color:var(--ink-dim);letter-spacing:.02em;margin-top:1px}
   @media(max-width:860px){
     .thead{display:none}
+    .opennum .mcap{display:block}
     .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "gauge gauge gauge";row-gap:8px}
     .rk,.hidem{display:none}
     .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
@@ -155,16 +155,11 @@
   .leg b{font-weight:600}
   .leg small{color:var(--ink-faint);font-size:10px}
   .legarrow{color:var(--ink-faint);font-family:var(--mono);font-size:12px}
-  .vibetag{font-family:var(--disp);font-weight:600;font-size:10.5px;letter-spacing:.1em;border-radius:4px;padding:1px 6px;margin-left:6px;
-    color:#0d1424;background:var(--ink-dim);vertical-align:2px;white-space:nowrap}
-  .vibetag.gem{background:var(--board);color:#241503}
   @media(max-width:860px){
     .triprow{grid-template-columns:1fr 110px;grid-template-areas:"dest open" "legs legs";row-gap:8px}
     .triprow .rk{display:none}
     .trdest{grid-area:dest}.legs{grid-area:legs}.triprow .opennum{grid-area:open}
   }
-  footer{margin-top:26px;color:var(--ink-faint);font-size:12.5px;line-height:1.65;max-width:880px}
-  footer b{color:var(--ink-dim)}
   @media (prefers-reduced-motion:no-preference){
     .fill,.bf{transition:width .35s ease, height .35s ease}
   }
@@ -175,7 +170,7 @@
   <header>
     <div>
       <div class="brand">Empty Seats <em>Atlas</em></div>
-      <div class="sub">Where Delta's planes fly emptiest, week by week — DOT T‑100 loads for Delta mainline, Endeavor, and Delta-marketed SkyWest flying. Pick the destination around the loads, then verify in TravelNet.</div>
+      <div class="sub">Where Delta's planes fly emptiest — DOT T‑100 loads for Delta mainline, Endeavor, and Delta-marketed SkyWest.</div>
     </div>
     <div class="datastamp">BTS T-100 · DL + 9E + OO<span style="opacity:.7">(DL-mktd)</span><br>Scheduled service · <span id="stampRange"></span></div>
   </header>
@@ -214,8 +209,9 @@
       </div>
       <div class="chip-group" id="freqGroup">
         <span class="chip-cap">Frequency</span>
-        <button class="chip" data-minf="0">Any</button>
-        <button class="chip on" data-minf="0.5">≈ ½ daily+</button>
+        <button class="chip on" data-minf="0">Any</button>
+        <button class="chip" data-minf="0.12">1×/wk+</button>
+        <button class="chip" data-minf="0.5">½ daily+</button>
         <button class="chip" data-minf="1">Daily+</button>
         <button class="chip" data-minf="3">3×/day+</button>
       </div>
@@ -234,7 +230,7 @@
         <button class="chip" data-vibe="afr">Africa</button>
         <button class="chip" data-vibe="mtn">Mountains &amp; parks</button>
         <button class="chip" data-vibe="city">City breaks</button>
-        <button class="chip on" id="gemChip" title="Hide the mega-cities and hubs; show only smaller, less-obvious destinations">✦ Off the beaten path</button>
+        <button class="chip on" id="gemChip" title="Hide the mega-cities and hubs; show only smaller, less-obvious destinations">Off the beaten path</button>
       </div>
       <div class="spacer"></div>
       <input class="dest-search" id="destSearch" placeholder="Filter destinations…">
@@ -261,15 +257,6 @@
     <div id="rows"></div>
   </div>
 
-  <footer>
-    <b>How to read this:</b> "Open/flt" is the average number of unsold seats per departure — the non-rev headline number. Cabin fill is passengers ÷ seats flown. Green flew wide open; red flew full. Expand any route for its full trend. The <b>Trip finder</b> tab ranks a curated set of leisure destinations by the open seats on the tightest leg of the journey, considering nonstops and one-stop connections over Delta hubs (each leg ≈3×/week or better); "off the beaten path" hides the mega-cities and surfaces the smaller gems.
-    <br><br>
-    <b>Week mode is an estimate.</b> DOT loads are only reported monthly, so weekly figures are interpolated between adjacent months' route-level data. Good for reading the seasonal curve into a specific week; it cannot see holiday spikes inside a month (Thanksgiving week, Christmas week, spring break peaks run far fuller than their month's average — assume so).
-    <br><br>
-    <b>SkyWest methodology:</b> SkyWest flies for Delta, United, American, and Alaska, and T‑100 doesn't say which. Each SkyWest segment here is weighted by the share of its flights marketed as Delta in DOT on-time records (Jan '25, Jul '25, Jan '26 samples); nearly all segments are single-brand, so the attribution is clean. Republic's Delta Connection flying can't be separated and is excluded.
-    <br><br>
-    <b>Other caveats:</b> T‑100 is historical with a ~3-month reporting lag — treat it as a seasonality guide and confirm live loads in TravelNet. Monthly averages hide day-of-week swings: Tue/Wed/Sat typically run lighter than shown, Sun/Mon and Friday evenings heavier. Source: Bureau of Transportation Statistics, Form 41 T‑100 Segment; carrier attribution from BTS Marketing Carrier On-Time Performance.
-  </footer>
 </div>
 
 <script>
@@ -319,8 +306,6 @@ const originList = [...byOrigin.keys()].sort((a,b)=>(originSeats.get(b)||0)-(ori
 
 // ---- trip finder config ----
 const HUBS = ["ATL","MSP","DTW","SLC","JFK","LGA","BOS","LAX","SEA"];
-const VIBE_LABELS = {sun:"SUN",eur:"EUROPE",apac:"ASIA·PAC",latam:"LATAM",afr:"AFRICA",mtn:"MTN·PARKS",city:"CITY"};
-const GEM_TAG = '<span class="vibetag gem">✦ GEM</span>';
 const VIBES = {
   // sun & beach — g = hidden gem
   CUN:["sun"],MBJ:["sun"],PUJ:["sun"],PLS:["sun"],NAS:["sun"],AUA:["sun"],SXM:["sun"],STT:["sun"],
@@ -368,12 +353,12 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 // ---- state ----
 let state = {
   origin:null, mode:"month", month:null, week:0,
-  geo:"all", minFpd:0.5, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
+  geo:"all", minFpd:0, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
   destFilter:"", sort:"open", dir:-1, expanded:null
 };
 {
-  const mke = A.findIndex(a=>a[0]==="MKE");
-  state.origin = (mke>=0 && byOrigin.has(mke)) ? mke : originList[0];
+  const bdl = A.findIndex(a=>a[0]==="BDL");
+  state.origin = (bdl>=0 && byOrigin.has(bdl)) ? bdl : originList[0];
   const m = new Date().getMonth()+1;
   state.month = yearsByMonth[m].size? m : POINTS[POINTS.length-1].m;
   // default week: nearest to today, clamped
@@ -399,6 +384,45 @@ function freqLabel(fpd){
   if(wk>=6.5) return "DAILY";
   if(wk>=0.9) return Math.round(wk)+"×/WK";
   return "<1×/WK";
+}
+// operating days for sub-daily routes, per window month (domestic routes only).
+// DATA.days: "ORG-DST" -> array of 7-bit masks (bit 0 = Monday) aligned to DATA.dm.
+const DAYS = DATA.days || {};
+const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
+const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
+function daysLabel(mask){
+  const on=[], off=[];
+  for(let i=0;i<7;i++) (mask>>i&1? on:off).push(DOW[i]);
+  if(!on.length || on.length===7) return null;
+  return on.length>=5? "EXC "+off.join("·") : on.join("·");
+}
+function currentDaysIdx(){
+  let p;
+  if(state.mode==="month"){ p = PIDX.get(pointKey(latestYearFor(state.month),state.month)); }
+  else {
+    const t=WEEKS[state.week].getTime()+3.5*864e5;
+    let i2=POINTS.findIndex(q=>q.mid>=t); if(i2<0)i2=POINTS.length-1;
+    const i1=Math.max(0,POINTS[i2].mid===t?i2:i2-1);
+    const f=POINTS[i2].mid===POINTS[i1].mid?0:(t-POINTS[i1].mid)/(POINTS[i2].mid-POINTS[i1].mid);
+    p = f<0.5? POINTS[i1]:POINTS[i2];
+  }
+  if(!p) return -1;
+  const k = p.y+"-"+String(p.m).padStart(2,"0");
+  return DM_IDX.has(k)? DM_IDX.get(k) : -1;
+}
+function freqTxt(fpd, o, d, dmi){
+  if(fpd<0.9 && dmi>=0){
+    const arr = DAYS[o+"-"+d];
+    const mk = arr? arr[dmi] : 0;
+    if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) return dl; }
+    if(!mk){
+      // domestic route with no scheduled-service record that month:
+      // charter/diversion-type flying with no fixed days
+      const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
+      if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US") return "IRREG";
+    }
+  }
+  return freqLabel(fpd);
 }
 
 // aggregate one origin's rows into dest -> pointIndex -> {dep,seats,pax}
@@ -481,7 +505,7 @@ function computeTrips(){
       worstLf:Math.max(...best.legs.map(l=>l.m.lf))});
   }
   out.sort((a,b)=> (b.bn-a.bn) || (b.sumOpen-a.sumOpen) || (a.legs.length-b.legs.length));
-  return out.slice(0,30);
+  return out;
 }
 
 function renderTrips(){
@@ -493,27 +517,27 @@ function renderTrips(){
   const sum = document.getElementById("summary");
   if(list.length){
     sum.innerHTML = "<strong>Trip ideas</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"")+
-      " · ranked by open seats on the tightest leg"+(state.gemsOnly?" · off the beaten path":"");
+      " · ranked by tightest leg";
   } else sum.textContent="";
   if(!list.length){
-    cont.innerHTML='<div class="empty">No trips match — try <b>Anywhere</b>, or different dates.</div>';
+    cont.innerHTML='<div class="empty">No trips match.</div>';
     return;
   }
+  const dmi = currentDaysIdx();
   let html="";
   list.forEach((r,i)=>{
     const col = lfColor(r.worstLf);
     const legHtml = r.legs.map((l,li)=>{
       const c = lfColor(l.m.lf);
       return (li? '<span class="legarrow">›</span>':'')+
-        '<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqLabel(l.m.fpd)+'</small></span>';
+        '<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
     }).join("");
     html += '<div class="triprow">'
       +'<span class="rk">'+(i+1)+"</span>"
       +'<span class="trdest"><span class="dcode">'+r.code+'</span><span class="dcity" style="display:block">'+esc(r.city)
-        +r.tags.filter(tg=>tg!=="g").map(tg=>'<span class="vibetag">'+VIBE_LABELS[tg]+"</span>").join("")+(r.tags.includes("g")?GEM_TAG:"")
         +(r.legs.length===1?'<span class="tag">NONSTOP</span>':"")+"</span></span>"
       +'<span class="legs">'+legHtml+"</span>"
-      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+"<small>OPEN/FLT · TIGHTEST LEG</small></span>"
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+"<small>MIN OPEN/LEG</small></span>"
       +"</div>";
   });
   cont.innerHTML=html;
@@ -594,16 +618,7 @@ const slider = document.getElementById("weekSlider");
 slider.max = WEEKS.length-1;
 slider.value = state.week;
 function weekLabel(wi){
-  const w = WEEKS[wi];
-  const t = w.getTime()+3.5*864e5;
-  let i2 = POINTS.findIndex(p=>p.mid>=t); if(i2<0) i2=POINTS.length-1;
-  const i1 = Math.max(0, POINTS[i2].mid===t? i2 : i2-1);
-  const p1=POINTS[i1],p2=POINTS[i2];
-  const y1="’"+String(p1.y).slice(2), y2="’"+String(p2.y).slice(2);
-  const src = i1===i2? MONTH_ABBR[p1.m-1]+" "+y1
-    : (p1.y===p2.y? MONTH_ABBR[p1.m-1]+"+"+MONTH_ABBR[p2.m-1]+" "+y2
-                  : MONTH_ABBR[p1.m-1]+" "+y1+"+"+MONTH_ABBR[p2.m-1]+" "+y2);
-  return 'Week of <b>'+fmtDate(w)+'</b><span class="estbadge">EST · from '+src+' data</span>';
+  return 'Week of <b>'+fmtDate(WEEKS[wi])+'</b><span class="estbadge">EST</span>';
 }
 function renderWeekOut(){
   document.getElementById("weekOut").innerHTML = weekLabel(state.week);
@@ -632,7 +647,7 @@ function openMenu(q){
   const ql=(q||"").trim().toLowerCase();
   const matches = originList.filter(idx=>{
     const a=A[idx]; return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql);
-  }).slice(0,40);
+  });
   om.innerHTML = matches.map(idx=>{
     const a=A[idx];
     return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
@@ -719,15 +734,14 @@ function renderBoard(){
   const whenTxt = isWeek? "week of "+fmtDate(WEEKS[state.week])
     : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
   if(list.length){
-    const top=[...list].sort((a,b)=>b.open-a.open)[0];
-    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"")+
-      " · emptiest: <span class='hl'>"+top.code+"</span> at "+Math.round(top.open)+" open seats/flight ("+top.lf.toFixed(0)+"% full)";
+    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"");
   } else sum.textContent="";
 
   if(!list.length){
-    cont.innerHTML='<div class="empty">No routes match — try <b>Any</b> frequency, different dates, or clear the destination filter.</div>';
+    cont.innerHTML='<div class="empty">No routes match.</div>';
     return;
   }
+  const dmi = currentDaysIdx();
   let html="";
   list.forEach((r,i)=>{
     const col=lfColor(r.lf);
@@ -735,11 +749,11 @@ function renderBoard(){
     html += '<button class="rowbtn" data-d="'+r.d+'" aria-expanded="'+isOpen+'">'
       +'<span class="rk">'+(i+1)+"</span>"
       +'<span class="dcode">'+r.code+"</span>"
-      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+'<span class="tag freq">'+freqLabel(r.fpd)+"</span></span>"
+      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+'<span class="tag freq">'+freqTxt(r.fpd,oa[0],r.code,dmi)+"</span></span>"
       +'<span class="num hidem">'+r.fpd.toFixed(1)+"</span>"
       +'<span class="num hidem">'+Math.round(r.spf)+"</span>"
       +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+col+'"></span><span class="ticks"></span></span><span class="lfnum" style="color:'+col+'">'+r.lf.toFixed(0)+"%</span></span>"
-      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.open)+"<small>OPEN SEATS/FLT</small></span>"
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>'
       +"</button>"
       +'<div class="season'+(isOpen?" open":"")+'">'+(isOpen? seasonHTML(r):"")+"</div>";
   });
@@ -768,25 +782,32 @@ function seasonHTML(r){
     const a=series[p.i];
     if(!a||a.dep<1) return {p,na:true};
     const m=metricsAt(a,p);
-    return {p,lf:m.lf,open:m.open};
+    return {p,lf:m.lf,open:m.open,fpd:m.fpd};
   });
+  const dayArr = DAYS[oa[0]+"-"+r.code];
   const avail = cells.filter(c=>!c.na);
   const maxOpen = Math.max(...avail.map(c=>c.open),1);
   let best=null; for(const c of avail){ if(!best||c.open>best.open) best=c; }
-  let h='<h4>Trend · <b>'+oa[0]+' → '+r.code+"</b> · Dec ’24 – Mar ’26 · bar height = open seats per flight</h4><div class='strip'>";
+  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month</h4><div class='strip'>";
   for(const c of cells){
     const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
     const yr = (c.p.m===1||c.p.i===0)? "’"+String(c.p.y).slice(2) : "";
     if(c.na){ h+='<div class="mcell"><div class="mbar na"></div><div class="mlab">'+lab+'<i>'+yr+'</i></div><div class="mval">—</div></div>'; continue; }
     const hp=Math.max(6,c.open/maxOpen*100), col=lfColor(c.lf);
     const cls = (best&&best.p.i===c.p.i?" best":"")+(selIdx.has(c.p.i)?" sel":"");
+    let dtxt="";
+    if(c.fpd<0.9 && dayArr){
+      const di = DM_IDX.get(c.p.y+"-"+String(c.p.m).padStart(2,"0"));
+      const mk = di==null? 0 : dayArr[di];
+      if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) dtxt='<small class="mdays">'+dl+'</small>'; }
+    }
     h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+" "+c.p.y+': '+c.lf.toFixed(1)+'% full">'
       +'<div class="bf" style="height:'+hp.toFixed(0)+'%;background:'+col+'"></div></div>'
       +'<div class="mlab">'+lab+'<i>'+(yr||"&nbsp;")+'</i></div>'
-      +'<div class="mval">'+Math.round(c.open)+"<small>"+c.lf.toFixed(0)+"%</small></div>";
+      +'<div class="mval">'+Math.round(c.open)+"<small>"+c.lf.toFixed(0)+"%</small>"+dtxt+"</div>";
     h+="</div>";
   }
-  h+="</div><div class='legend'>Green outline = emptiest month on record for this route · amber outline = your selected dates. Numbers: open seats/flight and load factor.</div>";
+  h+="</div>";
   return h;
 }
 

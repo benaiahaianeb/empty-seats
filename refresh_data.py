@@ -38,6 +38,7 @@ T100_FIELDS = ["UNIQUE_CARRIER", "ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
                "DEST", "DEST_CITY_NAME", "DEST_COUNTRY",
                "DEPARTURES_PERFORMED", "SEATS", "PASSENGERS", "YEAR", "MONTH", "CLASS"]
 SHARE_CSV = ROOT / "data" / "oo_dl_share.csv"
+DAYS_CSV = ROOT / "data" / "route_days.csv"
 TEMPLATE = ROOT / "template.html"
 OUTPUT = ROOT / "index.html"
 PLACEHOLDER = "/*__DATA__*/null"
@@ -108,6 +109,63 @@ def rebuild_skywest_share(session: requests.Session, latest_year: int) -> None:
     print(f"  wrote {SHARE_CSV} ({len(alls)} segments)")
 
 
+def rebuild_route_days(session, months: list[tuple[int, int]],
+                       limit: int | None = None) -> None:
+    """Incrementally build data/route_days.csv: per-route, per-month day-of-week
+    operating masks for DL-marketed flights, from Marketing-Carrier on-time data
+    (domestic routes only). mask bit 0 = Monday; a weekday counts if the route
+    saw at least one flight (operated or cancelled) on that weekday that month.
+
+    Months already present in the CSV are kept, months outside the window are
+    dropped, and only missing months are downloaded (typically one per run).
+    """
+    cols = ["o", "d", "ym", "mask"]
+    have = pd.DataFrame(columns=cols)
+    if DAYS_CSV.exists():
+        old = pd.read_csv(DAYS_CSV)
+        if all(c in old.columns for c in cols):
+            have = old[cols]
+    want = {f"{y}-{m:02d}" for y, m in months}
+    have = have[have.ym.isin(want)]
+    missing = [(y, m) for y, m in months
+               if f"{y}-{m:02d}" not in set(have.ym)]
+    frames, done = [have], 0
+    for y, m in missing:
+        if limit is not None and done >= limit:
+            break
+        print(f"  on-time {y}-{m:02d} ...", flush=True)
+        try:
+            r = session.get(OTM_URL.format(y=y, m=m), headers=UA, timeout=900)
+        except requests.RequestException as e:
+            print(f"    error: {e}")
+            continue
+        if r.status_code != 200 or "zip" not in r.headers.get("Content-Type", ""):
+            print("    unavailable")
+            continue
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        csv_name = [n for n in zf.namelist() if n.lower().endswith(".csv")][0]
+        df = pd.read_csv(zf.open(csv_name),
+                         usecols=["FlightDate", "Marketing_Airline_Network",
+                                  "Origin", "Dest"], dtype=str)
+        df = df[df.Marketing_Airline_Network == "DL"]
+        df = df.assign(dow=pd.to_datetime(df.FlightDate).dt.dayofweek)
+        masks = df.groupby(["Origin", "Dest"]).dow.apply(
+            lambda s: sum(1 << int(w) for w in set(s)))
+        add = masks.reset_index()
+        add.columns = ["o", "d", "mask"]
+        add["ym"] = f"{y}-{m:02d}"
+        frames.append(add[cols])
+        done += 1
+        print(f"    {len(add)} routes")
+    out = pd.concat(frames, ignore_index=True)
+    out = out.sort_values(["ym", "o", "d"])
+    out.to_csv(DAYS_CSV, index=False)
+    left = len(missing) - done
+    print(f"  route_days.csv: {len(out)} rows, "
+          f"{out.ym.nunique()}/{len(months)} window months"
+          + (f", {left} still missing" if left else ""))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh-skywest", action="store_true",
@@ -171,8 +229,28 @@ def main() -> int:
              int(round(r.dep)), int(round(r.seats)), int(round(r.pax)),
              car[r.UNIQUE_CARRIER]] for _, r in g.iterrows()]
 
+    window_months = sorted({(int(y), int(mo)) for y, mo in zip(g.YEAR, g.MONTH)})
+    print("Rebuilding operating-days table ...")
+    rebuild_route_days(session, window_months)
+
+    dm = [f"{y}-{mo:02d}" for y, mo in window_months]
+    dmi = {s: i for i, s in enumerate(dm)}
+    days: dict[str, list[int]] = {}
+    if DAYS_CSV.exists():
+        dd = pd.read_csv(DAYS_CSV)
+        route_set = set(zip(g.ORIGIN, g.DEST))
+        tmp: dict[tuple[str, str], list[int]] = {}
+        for o, d, ym, mk in zip(dd.o, dd.d, dd.ym, dd["mask"]):
+            if (o, d) in route_set and ym in dmi:
+                tmp.setdefault((o, d), [0] * len(dm))[dmi[ym]] = int(mk)
+        days = {f"{o}-{d}": arr for (o, d), arr in tmp.items()
+                if any(0 < v < 127 for v in arr)}
+    print(f"Operating-days routes embedded: {len(days)}")
+
     import json
-    payload = json.dumps({"airports": airports, "rows": rows}, separators=(",", ":"))
+    payload = json.dumps({"airports": airports, "rows": rows,
+                          "days": days, "dm": dm},
+                         separators=(",", ":"))
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:
         print("ERROR: template.html missing data placeholder"); return 1
@@ -182,5 +260,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # entry point
     sys.exit(main())
