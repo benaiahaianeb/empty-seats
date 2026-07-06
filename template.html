@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Empty Seats Atlas — Delta T-100 Load Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d1424; --panel:#141e36; --panel-2:#1a2745; --line:#26355c;
+    --ink:#e9eef9; --ink-dim:#8fa0c4; --ink-faint:#5c6c92;
+    --board:#ffb547; --open:#43d98a; --mid:#ffb547; --full:#ff5f6e;
+    --disp:"Barlow Condensed",Arial Narrow,sans-serif;
+    --body:"Barlow",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--bg)}
+  body{font-family:var(--body);color:var(--ink);background:
+    radial-gradient(1200px 500px at 70% -10%, #18244400 0%, #18244466 40%, transparent 70%), var(--bg);
+    min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  .brand{font-family:var(--disp);font-weight:700;font-size:34px;letter-spacing:.04em;text-transform:uppercase;line-height:1}
+  .brand em{font-style:normal;color:var(--board)}
+  .sub{color:var(--ink-dim);font-size:14px;max-width:560px;line-height:1.45}
+  .datastamp{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.06em;text-transform:uppercase;text-align:right}
+
+  .controls{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:18px;
+    display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px}
+  @media(max-width:760px){.controls{grid-template-columns:1fr}}
+  .ctl-label{font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+  .origin-box{position:relative}
+  .origin-input{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    font-family:var(--mono);font-size:15px;padding:10px 12px;outline:none}
+  .origin-input:focus{border-color:var(--board)}
+  .origin-menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:8px;max-height:260px;overflow:auto;display:none;box-shadow:0 12px 30px #0009}
+  .origin-menu.open{display:block}
+  .origin-opt{padding:8px 12px;cursor:pointer;font-size:14px;display:flex;gap:10px;align-items:baseline}
+  .origin-opt:hover{background:#223258}
+  .origin-opt .code{font-family:var(--mono);color:var(--board);font-weight:600;width:44px}
+  .origin-opt .city{color:var(--ink-dim)}
+
+  .modeswitch{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .modeswitch button{font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+    background:transparent;border:none;color:var(--ink-dim);padding:4px 12px;cursor:pointer}
+  .modeswitch button.on{background:var(--board);color:#241503}
+
+  .months{display:flex;gap:4px;flex-wrap:wrap}
+  .mo{font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.06em;padding:8px 0;width:52px;text-align:center;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;color:var(--ink-dim);cursor:pointer}
+  .mo:hover{border-color:var(--ink-faint);color:var(--ink)}
+  .mo.on{background:var(--board);border-color:var(--board);color:#241503}
+  .mo .yr{display:block;font-family:var(--mono);font-weight:500;font-size:9px;letter-spacing:.05em;opacity:.75}
+  .mo:focus-visible,.origin-input:focus-visible,.chip:focus-visible,button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--board);outline-offset:2px}
+
+  .weekpick{display:none}
+  .weekpick.on{display:block}
+  .monthpick.off{display:none}
+  .weekrow{display:flex;align-items:center;gap:10px}
+  .wbtn{font-family:var(--mono);font-size:14px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    width:34px;height:34px;cursor:pointer}
+  .wbtn:hover{border-color:var(--board)}
+  input[type=range]{flex:1;accent-color:var(--board);height:34px}
+  .weekout{margin-top:6px;font-size:13px;color:var(--ink-dim)}
+  .weekout b{color:var(--ink);font-family:var(--mono);font-weight:600}
+  .estbadge{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:#241503;background:var(--board);border-radius:4px;padding:1px 6px;vertical-align:1px;margin-left:6px}
+
+  .filters{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:14px}
+  .chip{font-family:var(--body);font-size:13px;font-weight:500;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+    background:transparent;color:var(--ink-dim);cursor:pointer}
+  .chip.on{background:var(--panel-2);border-color:var(--board);color:var(--ink)}
+  .chip-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip-cap{font-size:12px;color:var(--ink-faint);margin-right:2px;letter-spacing:.04em;text-transform:uppercase;font-family:var(--disp);font-weight:600}
+  .spacer{flex:1}
+  .dest-search{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;color:var(--ink);font-size:13px;
+    padding:7px 14px;outline:none;width:190px}
+  .dest-search:focus{border-color:var(--board)}
+
+  .summary{margin:22px 2px 10px;font-family:var(--disp);font-weight:600;font-size:19px;letter-spacing:.03em;color:var(--ink-dim)}
+  .summary strong{color:var(--ink);font-weight:700}
+  .summary .hl{color:var(--open)}
+
+  .board{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .thead{display:grid;grid-template-columns:44px 92px 1fr 86px 86px 210px 110px;gap:0;align-items:center;
+    padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .th{font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+    cursor:pointer;user-select:none;background:none;border:none;text-align:left;padding:0}
+  .th:hover{color:var(--ink)}
+  .th.right{text-align:right}
+  .th.active{color:var(--board)}
+  .th .arr{font-family:var(--mono);font-size:10px}
+
+  .rowbtn{width:100%;display:grid;grid-template-columns:44px 92px 1fr 86px 86px 210px 110px;align-items:center;
+    padding:11px 16px;border:none;border-bottom:1px solid #1d2a4a;background:transparent;color:var(--ink);cursor:pointer;text-align:left}
+  .rowbtn:hover{background:#182449}
+  .rk{font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+  .dcode{font-family:var(--mono);font-weight:600;font-size:19px;color:var(--board);letter-spacing:.05em}
+  .dcity{font-size:14px;color:var(--ink-dim);padding-right:10px;line-height:1.3}
+  .tag{font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:.08em;border:1px solid var(--line);
+    border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+  .tag.freq{color:var(--ink-dim);border-color:#31446f;background:#16223f}
+  .num{font-family:var(--mono);font-size:14px;text-align:right;color:var(--ink)}
+
+  .gauge{display:flex;align-items:center;gap:10px;padding:0 14px}
+  .cabin{flex:1;height:12px;border-radius:3px;background:#0b1226;border:1px solid var(--line);position:relative;overflow:hidden}
+  .fill{position:absolute;inset:0;right:auto;border-radius:2px}
+  .cabin .ticks{position:absolute;inset:0;background-image:repeating-linear-gradient(90deg,transparent 0 9%,#0d1424 9% 10%)}
+  .lfnum{font-family:var(--mono);font-size:13px;width:52px;text-align:right}
+
+  .opennum{font-family:var(--mono);font-weight:600;font-size:19px;text-align:right}
+  .opennum small{display:block;font-weight:400;font-size:9.5px;letter-spacing:.06em;color:var(--ink-faint)}
+
+  .season{border-bottom:1px solid #1d2a4a;background:#101a33;padding:16px 20px 20px;display:none}
+  .season.open{display:block}
+  .season h4{font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:14px}
+  .season h4 b{color:var(--ink)}
+  .strip{display:grid;grid-template-columns:repeat(16,1fr);gap:5px;align-items:end}
+  .mcell{text-align:center}
+  .mbar{position:relative;height:88px;background:#0b1226;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:6px}
+  .mbar .bf{position:absolute;left:0;right:0;bottom:0;border-radius:3px 3px 0 0}
+  .mbar.best{border-color:var(--open)}
+  .mbar.sel{border-color:var(--board);box-shadow:0 0 0 1px var(--board)}
+  .mbar.na{opacity:.25}
+  .mlab{font-family:var(--disp);font-weight:600;font-size:11px;letter-spacing:.05em;color:var(--ink-dim)}
+  .mlab i{font-style:normal;font-family:var(--mono);font-size:8.5px;color:var(--ink-faint);display:block}
+  .mval{font-family:var(--mono);font-size:11px;color:var(--ink)}
+  .mval small{display:block;font-size:9px;color:var(--ink-faint)}
+  .season .legend{margin-top:12px;font-size:12px;color:var(--ink-faint)}
+  @media(max-width:860px){
+    .thead{display:none}
+    .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "gauge gauge gauge";row-gap:8px}
+    .rk,.hidem{display:none}
+    .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
+    .gauge{grid-area:gauge;padding:0}
+    .strip{grid-template-columns:repeat(8,1fr);row-gap:12px}
+  }
+
+  .empty{padding:36px 20px;text-align:center;color:var(--ink-dim);font-size:14px}
+  .empty b{color:var(--ink)}
+
+  .viewtabs{display:flex;gap:8px;margin-top:22px}
+  .vtab{font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.1em;text-transform:uppercase;
+    background:var(--panel);border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;
+    color:var(--ink-dim);padding:9px 18px 7px;cursor:pointer}
+  .vtab.on{background:var(--panel-2);color:var(--board);border-color:var(--board)}
+  .summary{margin-top:14px}
+  .triprow{width:100%;display:grid;grid-template-columns:44px 240px 1fr 130px;align-items:center;
+    padding:13px 16px;border-bottom:1px solid #1d2a4a;color:var(--ink);text-align:left}
+  .legs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-right:10px}
+  .leg{font-family:var(--mono);font-size:12.5px;background:#0f1830;border:1px solid var(--line);border-radius:6px;padding:4px 8px;white-space:nowrap}
+  .leg b{font-weight:600}
+  .leg small{color:var(--ink-faint);font-size:10px}
+  .legarrow{color:var(--ink-faint);font-family:var(--mono);font-size:12px}
+  .vibetag{font-family:var(--disp);font-weight:600;font-size:10.5px;letter-spacing:.1em;border-radius:4px;padding:1px 6px;margin-left:6px;
+    color:#0d1424;background:var(--ink-dim);vertical-align:2px;white-space:nowrap}
+  .vibetag.gem{background:var(--board);color:#241503}
+  @media(max-width:860px){
+    .triprow{grid-template-columns:1fr 110px;grid-template-areas:"dest open" "legs legs";row-gap:8px}
+    .triprow .rk{display:none}
+    .trdest{grid-area:dest}.legs{grid-area:legs}.triprow .opennum{grid-area:open}
+  }
+  footer{margin-top:26px;color:var(--ink-faint);font-size:12.5px;line-height:1.65;max-width:880px}
+  footer b{color:var(--ink-dim)}
+  @media (prefers-reduced-motion:no-preference){
+    .fill,.bf{transition:width .35s ease, height .35s ease}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">Empty Seats <em>Atlas</em></div>
+      <div class="sub">Where Delta's planes fly emptiest, week by week — DOT T‑100 loads for Delta mainline, Endeavor, and Delta-marketed SkyWest flying. Pick the destination around the loads, then verify in TravelNet.</div>
+    </div>
+    <div class="datastamp">BTS T-100 · DL + 9E + OO<span style="opacity:.7">(DL-mktd)</span><br>Scheduled service · <span id="stampRange"></span></div>
+  </header>
+
+  <div class="controls">
+    <div>
+      <label class="ctl-label" for="originInput">Departing from</label>
+      <div class="origin-box">
+        <input id="originInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Type airport or city…">
+        <div id="originMenu" class="origin-menu" role="listbox"></div>
+      </div>
+    </div>
+    <div>
+      <span class="ctl-label">Travel dates
+        <span class="modeswitch">
+          <button id="modeMonth" class="on">Month</button>
+          <button id="modeWeek">Week</button>
+        </span>
+      </span>
+      <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
+      <div class="weekpick" id="weekPick">
+        <div class="weekrow">
+          <button class="wbtn" id="wPrev" aria-label="Previous week">‹</button>
+          <input type="range" id="weekSlider" min="0" max="1" value="0" aria-label="Select week">
+          <button class="wbtn" id="wNext" aria-label="Next week">›</button>
+        </div>
+        <div class="weekout" id="weekOut"></div>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="chip-group" id="geoGroup">
+        <span class="chip-cap">Show</span>
+        <button class="chip on" data-geo="all">All</button>
+        <button class="chip" data-geo="dom">Domestic</button>
+        <button class="chip" data-geo="intl">International</button>
+      </div>
+      <div class="chip-group" id="freqGroup">
+        <span class="chip-cap">Frequency</span>
+        <button class="chip" data-minf="0">Any</button>
+        <button class="chip on" data-minf="0.5">≈ ½ daily+</button>
+        <button class="chip" data-minf="1">Daily+</button>
+        <button class="chip" data-minf="3">3×/day+</button>
+      </div>
+      <div class="chip-group" id="carGroup">
+        <span class="chip-cap">Operators</span>
+        <button class="chip on" data-car="1" title="Endeavor Air — wholly-owned Delta Connection">Endeavor 9E</button>
+        <button class="chip on" data-car="2" title="SkyWest segments apportioned by share marketed as Delta in DOT on-time data">SkyWest (est.)</button>
+      </div>
+      <div class="chip-group" id="vibeGroup" style="display:none">
+        <span class="chip-cap">Vibe</span>
+        <button class="chip on" data-vibe="all">Anywhere</button>
+        <button class="chip" data-vibe="sun">Sun &amp; beach</button>
+        <button class="chip" data-vibe="eur">Europe &amp; Med</button>
+        <button class="chip" data-vibe="apac">Asia &amp; Pacific</button>
+        <button class="chip" data-vibe="latam">Latin America</button>
+        <button class="chip" data-vibe="afr">Africa</button>
+        <button class="chip" data-vibe="mtn">Mountains &amp; parks</button>
+        <button class="chip" data-vibe="city">City breaks</button>
+        <button class="chip on" id="gemChip" title="Hide the mega-cities and hubs; show only smaller, less-obvious destinations">✦ Off the beaten path</button>
+      </div>
+      <div class="spacer"></div>
+      <input class="dest-search" id="destSearch" placeholder="Filter destinations…">
+    </div>
+  </div>
+
+  <div class="viewtabs">
+    <button class="vtab on" id="tabBoard">Departure board</button>
+    <button class="vtab" id="tabTrip">Trip finder</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="board">
+    <div class="thead">
+      <span class="th">#</span>
+      <button class="th" data-sort="code">Dest</button>
+      <span class="th">City</span>
+      <button class="th right" data-sort="fpd">Flts/day <span class="arr"></span></button>
+      <button class="th right" data-sort="spf">Seats/flt <span class="arr"></span></button>
+      <button class="th" data-sort="lf" style="padding-left:14px">Cabin fill (load factor) <span class="arr"></span></button>
+      <button class="th right active" data-sort="open">Open/flt <span class="arr">▼</span></button>
+    </div>
+    <div id="rows"></div>
+  </div>
+
+  <footer>
+    <b>How to read this:</b> "Open/flt" is the average number of unsold seats per departure — the non-rev headline number. Cabin fill is passengers ÷ seats flown. Green flew wide open; red flew full. Expand any route for its full trend. The <b>Trip finder</b> tab ranks a curated set of leisure destinations by the open seats on the tightest leg of the journey, considering nonstops and one-stop connections over Delta hubs (each leg ≈3×/week or better); "off the beaten path" hides the mega-cities and surfaces the smaller gems.
+    <br><br>
+    <b>Week mode is an estimate.</b> DOT loads are only reported monthly, so weekly figures are interpolated between adjacent months' route-level data. Good for reading the seasonal curve into a specific week; it cannot see holiday spikes inside a month (Thanksgiving week, Christmas week, spring break peaks run far fuller than their month's average — assume so).
+    <br><br>
+    <b>SkyWest methodology:</b> SkyWest flies for Delta, United, American, and Alaska, and T‑100 doesn't say which. Each SkyWest segment here is weighted by the share of its flights marketed as Delta in DOT on-time records (Jan '25, Jul '25, Jan '26 samples); nearly all segments are single-brand, so the attribution is clean. Republic's Delta Connection flying can't be separated and is excluded.
+    <br><br>
+    <b>Other caveats:</b> T‑100 is historical with a ~3-month reporting lag — treat it as a seasonality guide and confirm live loads in TravelNet. Monthly averages hide day-of-week swings: Tue/Wed/Sat typically run lighter than shown, Sun/Mon and Friday evenings heavier. Source: Bureau of Transportation Statistics, Form 41 T‑100 Segment; carrier attribution from BTS Marketing Carrier On-Time Performance.
+  </footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function daysIn(y,m){ return new Date(y,m,0).getDate(); }
+
+// ---- index data ----
+const A = DATA.airports;               // [code, city, country]
+const rows = DATA.rows;                // [oIdx, dIdx, year, month, dep, seats, pax, carrier]
+const byOrigin = new Map();
+for(const r of rows){
+  if(!byOrigin.has(r[0])) byOrigin.set(r[0],[]);
+  byOrigin.get(r[0]).push(r);
+}
+// chronological month points across the data range
+const pointKey = (y,m)=> y*100+m;
+const pointSet = new Set(rows.map(r=>pointKey(r[2],r[3])));
+const POINTS = [...pointSet].sort((a,b)=>a-b).map(k=>({y:Math.floor(k/100), m:k%100}));
+POINTS.forEach((p,i)=>{ p.i=i; p.mid = new Date(p.y, p.m-1, 15).getTime(); p.days = daysIn(p.y,p.m); });
+const PIDX = new Map(POINTS.map(p=>[pointKey(p.y,p.m), p]));
+const yearsByMonth = Array.from({length:13},()=>new Set());
+for(const p of POINTS) yearsByMonth[p.m].add(p.y);
+const latestYearFor = m => Math.max(...yearsByMonth[m]);
+
+// week list: Mondays whose midpoint (Thu) falls inside [first,last] month midpoints
+const WEEKS = (()=>{
+  const first = POINTS[0].mid, last = POINTS[POINTS.length-1].mid;
+  const out=[];
+  let d = new Date(first); // find Monday on/before first mid
+  d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  for(;;){
+    const mid = d.getTime() + 3.5*864e5;
+    if(mid > last) break;
+    if(mid >= first) out.push(new Date(d));
+    d = new Date(d.getTime() + 7*864e5);
+  }
+  return out;
+})();
+
+// origin list sorted by total seats
+const originSeats = new Map();
+for(const r of rows){ originSeats.set(r[0],(originSeats.get(r[0])||0)+r[5]); }
+const originList = [...byOrigin.keys()].sort((a,b)=>(originSeats.get(b)||0)-(originSeats.get(a)||0));
+
+// ---- trip finder config ----
+const HUBS = ["ATL","MSP","DTW","SLC","JFK","LGA","BOS","LAX","SEA"];
+const VIBE_LABELS = {sun:"SUN",eur:"EUROPE",apac:"ASIA·PAC",latam:"LATAM",afr:"AFRICA",mtn:"MTN·PARKS",city:"CITY"};
+const GEM_TAG = '<span class="vibetag gem">✦ GEM</span>';
+const VIBES = {
+  // sun & beach — g = hidden gem
+  CUN:["sun"],MBJ:["sun"],PUJ:["sun"],PLS:["sun"],NAS:["sun"],AUA:["sun"],SXM:["sun"],STT:["sun"],
+  STX:["sun","g"],SJU:["sun"],GCM:["sun"],BON:["sun","g"],SVD:["sun","g"],CUR:["sun","g"],
+  BZE:["sun","g"],LIR:["sun","g"],SJO:["sun","latam"],SJD:["sun"],PVR:["sun"],CZM:["sun","g"],
+  TQO:["sun","g"],POP:["sun","g"],STI:["latam","g"],SDQ:["latam","sun"],
+  HNL:["sun"],OGG:["sun"],KOA:["sun","g"],LIH:["sun","g"],
+  MIA:["sun","city"],FLL:["sun"],PBI:["sun"],RSW:["sun"],TPA:["sun"],MCO:["sun"],SRQ:["sun","g"],
+  EYW:["sun","g"],MYR:["sun"],HHH:["sun","g"],ILM:["sun","g"],VPS:["sun","g"],PNS:["sun","g"],
+  ECP:["sun","g"],PSP:["sun","g"],TUS:["sun","g"],PHX:["sun","city"],SAV:["city","g"],CHS:["city"],
+  // europe & med
+  LHR:["eur","city"],CDG:["eur","city"],NCE:["eur","g"],AMS:["eur","city"],FCO:["eur","city"],
+  MXP:["eur"],VCE:["eur"],NAP:["eur","g"],CTA:["eur","g"],PMO:["eur","g"],FLR:["eur","g"],
+  ATH:["eur"],DBV:["eur","g"],MAD:["eur","city"],BCN:["eur","city"],LIS:["eur","city"],
+  OPO:["eur","g"],DUB:["eur","city"],SNN:["eur","g"],EDI:["eur","g"],KEF:["eur","mtn","g"],
+  FRA:["eur"],MUC:["eur"],ZRH:["eur"],GVA:["eur","g"],BRU:["eur"],CPH:["eur","city"],ARN:["eur","g"],
+  PRG:["eur","city"],IST:["eur","city"],TLV:["eur"],
+  // asia & pacific
+  HND:["apac","city"],ICN:["apac","city"],PVG:["apac","city"],SYD:["apac","city"],
+  AKL:["apac","g"],BNE:["apac","g"],PPT:["apac","sun","g"],
+  // latin america
+  MEX:["latam","city"],GDL:["latam","g"],BOG:["latam"],MDE:["latam","g"],CTG:["latam","sun","g"],
+  LIM:["latam"],SCL:["latam","g"],EZE:["latam","city"],GRU:["latam","city"],GIG:["latam","sun"],
+  GUA:["latam","g"],SAL:["latam"],
+  // africa
+  ACC:["afr","g"],LOS:["afr"],DKR:["afr","g"],JNB:["afr"],CPT:["afr","g"],RAK:["afr","g"],
+  // mountains, parks & north woods
+  JAC:["mtn","g"],BZN:["mtn","g"],MSO:["mtn","g"],FCA:["mtn","g"],RAP:["mtn","g"],COD:["mtn","g"],
+  EGE:["mtn","g"],HDN:["mtn","g"],ASE:["mtn"],SUN:["mtn","g"],MTJ:["mtn","g"],GJT:["mtn","g"],
+  RNO:["mtn"],BOI:["mtn","g"],IDA:["mtn","g"],FAT:["mtn","g"],RDM:["mtn","g"],MFR:["mtn","g"],
+  TVC:["mtn","g"],PLN:["mtn","g"],MQT:["mtn","g"],CMX:["mtn","g"],ESC:["mtn","g"],RHI:["mtn","g"],
+  APN:["mtn","g"],IMT:["mtn","g"],BRD:["mtn","g"],BJI:["mtn","g"],HIB:["mtn","g"],INL:["mtn","g"],
+  DLH:["mtn","g"],ANC:["mtn","g"],FAI:["mtn","g"],JNU:["mtn","g"],SIT:["mtn","g"],KTN:["mtn","g"],
+  TYS:["mtn","g"],CHA:["mtn","g"],AVL:["city","mtn","g"],ROA:["mtn","g"],CHO:["city","g"],
+  BTV:["mtn","g"],BGR:["mtn","g"],PWM:["city","g"],ACK:["sun","g"],MVY:["sun","g"],
+  MRY:["sun","g"],SBA:["sun","g"],
+  // city breaks
+  JFK:["city"],LGA:["city"],BOS:["city"],SEA:["city"],SFO:["city"],LAX:["city"],SAN:["city","sun"],
+  LAS:["city"],MSY:["city"],BNA:["city"],AUS:["city"],DEN:["city","mtn"],ORD:["city"],DCA:["city"],
+  PDX:["city"],YVR:["city","mtn"],YYZ:["city"],YUL:["city","g"],ATL:["city"],MSP:["city"],
+  DTW:["city"],SLC:["city","mtn"]
+};
+const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
+
+// ---- state ----
+let state = {
+  origin:null, mode:"month", month:null, week:0,
+  geo:"all", minFpd:0.5, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
+  destFilter:"", sort:"open", dir:-1, expanded:null
+};
+{
+  const mke = A.findIndex(a=>a[0]==="MKE");
+  state.origin = (mke>=0 && byOrigin.has(mke)) ? mke : originList[0];
+  const m = new Date().getMonth()+1;
+  state.month = yearsByMonth[m].size? m : POINTS[POINTS.length-1].m;
+  // default week: nearest to today, clamped
+  const t = Date.now();
+  let best=0,bd=Infinity;
+  WEEKS.forEach((w,i)=>{ const d=Math.abs(w.getTime()+3.5*864e5-t); if(d<bd){bd=d;best=i;} });
+  state.week = best;
+}
+
+// ---- helpers ----
+function lfColor(lf){
+  if(lf<=60) return "var(--open)";
+  if(lf<=75) return "color-mix(in srgb, var(--open) "+Math.round((75-lf)/15*100)+"%, var(--mid))";
+  if(lf<=88) return "color-mix(in srgb, var(--mid) "+Math.round((88-lf)/13*100)+"%, var(--full))";
+  return "var(--full)";
+}
+const esc = s => s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtDate = d => d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+function freqLabel(fpd){
+  if(fpd>=1.5) return Math.round(fpd)+"×/DAY";
+  if(fpd>=0.9) return "DAILY";
+  const wk = fpd*7;
+  if(wk>=6.5) return "DAILY";
+  if(wk>=0.9) return Math.round(wk)+"×/WK";
+  return "<1×/WK";
+}
+
+// aggregate one origin's rows into dest -> pointIndex -> {dep,seats,pax}
+function destSeries(originIdx){
+  const list = byOrigin.get(originIdx)||[];
+  const out = new Map();
+  for(const r of list){
+    if(r[7]!==0 && !state.cars.has(r[7])) continue;
+    const p = PIDX.get(pointKey(r[2],r[3]));
+    if(!p) continue;
+    if(!out.has(r[1])) out.set(r[1], new Array(POINTS.length));
+    const arr = out.get(r[1]);
+    if(!arr[p.i]) arr[p.i]={dep:0,seats:0,pax:0};
+    const a=arr[p.i]; a.dep+=r[4]; a.seats+=r[5]; a.pax+=r[6];
+  }
+  return out;
+}
+function metricsAt(a, p){ // a={dep,seats,pax}, p=point
+  return {fpd:a.dep/p.days, spf:a.seats/a.dep, lf:a.pax/a.seats*100, open:(a.seats-a.pax)/a.dep};
+}
+function metricFromSeries(arr){
+  if(!arr) return null;
+  if(state.mode==="month"){
+    const p = PIDX.get(pointKey(latestYearFor(state.month),state.month));
+    if(!p) return null;
+    const a = arr[p.i];
+    if(!a || a.dep<1 || a.seats<1) return null;
+    return metricsAt(a,p);
+  }
+  const t = WEEKS[state.week].getTime()+3.5*864e5;
+  let i2 = POINTS.findIndex(p=>p.mid>=t); if(i2<0) i2=POINTS.length-1;
+  const i1 = Math.max(0, POINTS[i2].mid===t? i2 : i2-1);
+  const a1=arr[i1], a2=arr[i2];
+  if(!a1||!a2||a1.dep<1||a2.dep<1||a1.seats<1||a2.seats<1) return null;
+  const p1=POINTS[i1],p2=POINTS[i2];
+  const f = p2.mid===p1.mid? 0 : (t-p1.mid)/(p2.mid-p1.mid);
+  const m1=metricsAt(a1,p1), m2=metricsAt(a2,p2);
+  const m={}; for(const k of ["fpd","spf","lf","open"]) m[k]=m1[k]+(m2[k]-m1[k])*f;
+  return m;
+}
+
+function computeTrips(){
+  const oIdx = state.origin, oCode = A[oIdx][0];
+  const oSer = destSeries(oIdx);
+  const hubSer = {};
+  for(const h of HUBS){
+    if(h===oCode) continue;
+    const hi = CODE_IDX.get(h);
+    if(hi==null || !byOrigin.has(hi)) continue;
+    hubSer[h] = {idx:hi, ser:destSeries(hi), m:metricFromSeries(oSer.get(hi))};
+  }
+  const MINF = 0.4; // ~3x/week per leg minimum for realistic standby
+  const out = [];
+  for(const code in VIBES){
+    const tags = VIBES[code];
+    if(state.vibe!=="all" && !tags.includes(state.vibe)) continue;
+    if(state.gemsOnly && !tags.includes("g")) continue;
+    const d = CODE_IDX.get(code);
+    if(d==null || d===oIdx) continue;
+    const options = [];
+    const direct = metricFromSeries(oSer.get(d));
+    if(direct && direct.fpd>=MINF)
+      options.push({legs:[{f:oCode,t:code,m:direct}], bn:direct.open, direct:true});
+    for(const h in hubSer){
+      if(h===code) continue;
+      const m1 = hubSer[h].m;
+      if(!m1 || m1.fpd<MINF) continue;
+      const m2 = metricFromSeries(hubSer[h].ser.get(d));
+      if(!m2 || m2.fpd<MINF) continue;
+      options.push({legs:[{f:oCode,t:h,m:m1},{f:h,t:code,m:m2}], bn:Math.min(m1.open,m2.open), direct:false});
+    }
+    if(!options.length) continue;
+    options.sort((a,b)=>b.bn-a.bn);
+    let best = options[0];
+    const dOpt = options.find(o=>o.direct);
+    if(dOpt && dOpt.bn >= best.bn-5) best = dOpt; // prefer nonstop when close
+    const ap = A[d];
+    out.push({d, code, city:ap[1], tags, legs:best.legs, bn:best.bn,
+      sumOpen:best.legs.reduce((s,l)=>s+l.m.open,0),
+      worstLf:Math.max(...best.legs.map(l=>l.m.lf))});
+  }
+  out.sort((a,b)=> (b.bn-a.bn) || (b.sumOpen-a.sumOpen) || (a.legs.length-b.legs.length));
+  return out.slice(0,30);
+}
+
+function renderTrips(){
+  const list = computeTrips();
+  const cont = document.getElementById("rows");
+  const oa = A[state.origin];
+  const isWeek = state.mode==="week";
+  const whenTxt = isWeek? "week of "+fmtDate(WEEKS[state.week]) : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
+  const sum = document.getElementById("summary");
+  if(list.length){
+    sum.innerHTML = "<strong>Trip ideas</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"")+
+      " · ranked by open seats on the tightest leg"+(state.gemsOnly?" · off the beaten path":"");
+  } else sum.textContent="";
+  if(!list.length){
+    cont.innerHTML='<div class="empty">No trips match — try <b>Anywhere</b>, or different dates.</div>';
+    return;
+  }
+  let html="";
+  list.forEach((r,i)=>{
+    const col = lfColor(r.worstLf);
+    const legHtml = r.legs.map((l,li)=>{
+      const c = lfColor(l.m.lf);
+      return (li? '<span class="legarrow">›</span>':'')+
+        '<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqLabel(l.m.fpd)+'</small></span>';
+    }).join("");
+    html += '<div class="triprow">'
+      +'<span class="rk">'+(i+1)+"</span>"
+      +'<span class="trdest"><span class="dcode">'+r.code+'</span><span class="dcity" style="display:block">'+esc(r.city)
+        +r.tags.filter(tg=>tg!=="g").map(tg=>'<span class="vibetag">'+VIBE_LABELS[tg]+"</span>").join("")+(r.tags.includes("g")?GEM_TAG:"")
+        +(r.legs.length===1?'<span class="tag">NONSTOP</span>':"")+"</span></span>"
+      +'<span class="legs">'+legHtml+"</span>"
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+"<small>OPEN/FLT · TIGHTEST LEG</small></span>"
+      +"</div>";
+  });
+  cont.innerHTML=html;
+}
+
+function passesGeoFreq(d, m){
+  const ap=A[d], intl=ap[2]!=="US";
+  if(state.geo==="dom" && intl) return false;
+  if(state.geo==="intl" && !intl) return false;
+  if(m.fpd < state.minFpd) return false;
+  return true;
+}
+function buildRow(d, m, extra){
+  const ap=A[d];
+  return Object.assign({d, code:ap[0], city:ap[1], intl:ap[2]!=="US"}, m, extra);
+}
+
+function computeMonth(originIdx, month){
+  const year = latestYearFor(month);
+  const p = PIDX.get(pointKey(year,month));
+  const series = destSeries(originIdx);
+  const out=[];
+  for(const [d,arr] of series){
+    const a = arr[p.i]; if(!a || a.dep<1 || a.seats<1) continue;
+    const m = metricsAt(a,p);
+    if(!passesGeoFreq(d,m)) continue;
+    out.push(buildRow(d,m,{year}));
+  }
+  return finish(out);
+}
+
+function computeWeek(originIdx, wi){
+  const t = WEEKS[wi].getTime()+3.5*864e5;
+  // bracket points
+  let i2 = POINTS.findIndex(p=>p.mid>=t);
+  if(i2<0) i2=POINTS.length-1;
+  const i1 = Math.max(0, POINTS[i2].mid===t? i2 : i2-1);
+  const p1=POINTS[i1], p2=POINTS[i2];
+  const f = p2.mid===p1.mid? 0 : (t-p1.mid)/(p2.mid-p1.mid);
+  const series = destSeries(originIdx);
+  const out=[];
+  for(const [d,arr] of series){
+    const a1=arr[i1], a2=arr[i2];
+    if(!a1 || !a2 || a1.dep<1 || a2.dep<1 || a1.seats<1 || a2.seats<1) continue; // needs service both sides
+    const m1=metricsAt(a1,p1), m2=metricsAt(a2,p2);
+    const m={}; for(const k of ["fpd","spf","lf","open"]) m[k]=m1[k]+(m2[k]-m1[k])*f;
+    if(!passesGeoFreq(d,m)) continue;
+    out.push(buildRow(d,m,{p1,p2}));
+  }
+  return finish(out);
+}
+
+function finish(out){
+  const q = state.destFilter.trim().toLowerCase();
+  const filtered = q? out.filter(o=>o.code.toLowerCase().includes(q)||o.city.toLowerCase().includes(q)) : out;
+  const dir=state.dir, key=state.sort;
+  filtered.sort((a,b)=> key==="code"? dir*a.code.localeCompare(b.code) : dir*(a[key]-b[key]));
+  return filtered;
+}
+
+// ---- month chips ----
+function renderMonths(){
+  const el = document.getElementById("months");
+  el.innerHTML="";
+  for(let m=1;m<=12;m++){
+    const has = yearsByMonth[m].size>0;
+    const b = document.createElement("button");
+    b.className = "mo"+(state.month===m?" on":"");
+    b.disabled=!has; if(!has) b.style.opacity=.3;
+    b.innerHTML = MONTH_ABBR[m-1]+'<span class="yr">'+(has?"’"+String(latestYearFor(m)).slice(2):"—")+"</span>";
+    b.onclick = ()=>{ state.month=m; state.expanded=null; renderMonths(); renderBoard(); };
+    el.appendChild(b);
+  }
+}
+
+// ---- week slider ----
+const slider = document.getElementById("weekSlider");
+slider.max = WEEKS.length-1;
+slider.value = state.week;
+function weekLabel(wi){
+  const w = WEEKS[wi];
+  const t = w.getTime()+3.5*864e5;
+  let i2 = POINTS.findIndex(p=>p.mid>=t); if(i2<0) i2=POINTS.length-1;
+  const i1 = Math.max(0, POINTS[i2].mid===t? i2 : i2-1);
+  const p1=POINTS[i1],p2=POINTS[i2];
+  const y1="’"+String(p1.y).slice(2), y2="’"+String(p2.y).slice(2);
+  const src = i1===i2? MONTH_ABBR[p1.m-1]+" "+y1
+    : (p1.y===p2.y? MONTH_ABBR[p1.m-1]+"+"+MONTH_ABBR[p2.m-1]+" "+y2
+                  : MONTH_ABBR[p1.m-1]+" "+y1+"+"+MONTH_ABBR[p2.m-1]+" "+y2);
+  return 'Week of <b>'+fmtDate(w)+'</b><span class="estbadge">EST · from '+src+' data</span>';
+}
+function renderWeekOut(){
+  document.getElementById("weekOut").innerHTML = weekLabel(state.week);
+}
+slider.addEventListener("input",()=>{ state.week=+slider.value; state.expanded=null; renderWeekOut(); renderBoard(); });
+document.getElementById("wPrev").onclick=()=>{ if(state.week>0){state.week--; slider.value=state.week; state.expanded=null; renderWeekOut(); renderBoard();} };
+document.getElementById("wNext").onclick=()=>{ if(state.week<WEEKS.length-1){state.week++; slider.value=state.week; state.expanded=null; renderWeekOut(); renderBoard();} };
+
+// ---- mode switch ----
+function setMode(m){
+  state.mode=m; state.expanded=null;
+  document.getElementById("modeMonth").classList.toggle("on",m==="month");
+  document.getElementById("modeWeek").classList.toggle("on",m==="week");
+  document.getElementById("monthPick").classList.toggle("off",m!=="month");
+  document.getElementById("weekPick").classList.toggle("on",m==="week");
+  renderBoard();
+}
+document.getElementById("modeMonth").onclick=()=>setMode("month");
+document.getElementById("modeWeek").onclick=()=>setMode("week");
+
+// ---- origin picker ----
+const oi = document.getElementById("originInput");
+const om = document.getElementById("originMenu");
+function setOriginInputLabel(){ const a=A[state.origin]; oi.value=a[0]+" — "+a[1]; }
+function openMenu(q){
+  const ql=(q||"").trim().toLowerCase();
+  const matches = originList.filter(idx=>{
+    const a=A[idx]; return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql);
+  }).slice(0,40);
+  om.innerHTML = matches.map(idx=>{
+    const a=A[idx];
+    return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
+  }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
+  om.classList.add("open");
+}
+oi.addEventListener("focus",()=>{ oi.select(); openMenu(""); });
+oi.addEventListener("input",()=>openMenu(oi.value));
+oi.addEventListener("blur",()=>setTimeout(()=>{ om.classList.remove("open"); setOriginInputLabel(); },150));
+om.addEventListener("mousedown",e=>{
+  const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
+  state.origin=+opt.dataset.idx; state.expanded=null;
+  om.classList.remove("open"); setOriginInputLabel(); renderBoard();
+});
+
+// ---- filters ----
+document.getElementById("geoGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-geo]"); if(!b) return;
+  state.geo=b.dataset.geo;
+  document.querySelectorAll("#geoGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
+  renderBoard();
+});
+document.getElementById("freqGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-minf]"); if(!b) return;
+  state.minFpd=+b.dataset.minf;
+  document.querySelectorAll("#freqGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
+  renderBoard();
+});
+document.getElementById("carGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-car]"); if(!b) return;
+  const c=+b.dataset.car;
+  if(state.cars.has(c)) state.cars.delete(c); else state.cars.add(c);
+  b.classList.toggle("on",state.cars.has(c));
+  renderBoard();
+});
+document.getElementById("destSearch").addEventListener("input",e=>{ state.destFilter=e.target.value; renderBoard(); });
+document.querySelectorAll(".th[data-sort]").forEach(th=>{
+  th.addEventListener("click",()=>{
+    const k=th.dataset.sort;
+    if(state.sort===k) state.dir*=-1;
+    else { state.sort=k; state.dir=(k==="lf"||k==="code")?1:-1; }
+    document.querySelectorAll(".th").forEach(t=>{t.classList.remove("active"); const a=t.querySelector(".arr"); if(a)a.textContent="";});
+    th.classList.add("active");
+    const a=th.querySelector(".arr"); if(a)a.textContent=state.dir<0?"▼":"▲";
+    renderBoard();
+  });
+});
+
+// ---- view tabs ----
+function setView(v){
+  state.view=v; state.expanded=null;
+  document.getElementById("tabBoard").classList.toggle("on",v==="board");
+  document.getElementById("tabTrip").classList.toggle("on",v==="trip");
+  const trip = v==="trip";
+  document.getElementById("geoGroup").style.display = trip? "none":"";
+  document.getElementById("freqGroup").style.display = trip? "none":"";
+  document.getElementById("destSearch").style.display = trip? "none":"";
+  document.getElementById("vibeGroup").style.display = trip? "":"none";
+  document.querySelector(".thead").style.display = trip? "none":"";
+  renderBoard();
+}
+document.getElementById("tabBoard").onclick=()=>setView("board");
+document.getElementById("tabTrip").onclick=()=>setView("trip");
+document.getElementById("gemChip").addEventListener("click",e=>{
+  state.gemsOnly=!state.gemsOnly;
+  e.currentTarget.classList.toggle("on",state.gemsOnly);
+  renderBoard();
+});
+document.getElementById("vibeGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-vibe]"); if(!b) return;
+  state.vibe=b.dataset.vibe;
+  document.querySelectorAll("#vibeGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
+  renderBoard();
+});
+
+// ---- board ----
+function renderBoard(){
+  if(state.view==="trip"){ renderTrips(); return; }
+  const isWeek = state.mode==="week";
+  const list = isWeek? computeWeek(state.origin,state.week) : computeMonth(state.origin,state.month);
+  const cont = document.getElementById("rows");
+  const oa = A[state.origin];
+  const sum = document.getElementById("summary");
+  const whenTxt = isWeek? "week of "+fmtDate(WEEKS[state.week])
+    : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
+  if(list.length){
+    const top=[...list].sort((a,b)=>b.open-a.open)[0];
+    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"")+
+      " · emptiest: <span class='hl'>"+top.code+"</span> at "+Math.round(top.open)+" open seats/flight ("+top.lf.toFixed(0)+"% full)";
+  } else sum.textContent="";
+
+  if(!list.length){
+    cont.innerHTML='<div class="empty">No routes match — try <b>Any</b> frequency, different dates, or clear the destination filter.</div>';
+    return;
+  }
+  let html="";
+  list.forEach((r,i)=>{
+    const col=lfColor(r.lf);
+    const isOpen=state.expanded===r.d;
+    html += '<button class="rowbtn" data-d="'+r.d+'" aria-expanded="'+isOpen+'">'
+      +'<span class="rk">'+(i+1)+"</span>"
+      +'<span class="dcode">'+r.code+"</span>"
+      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+'<span class="tag freq">'+freqLabel(r.fpd)+"</span></span>"
+      +'<span class="num hidem">'+r.fpd.toFixed(1)+"</span>"
+      +'<span class="num hidem">'+Math.round(r.spf)+"</span>"
+      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+col+'"></span><span class="ticks"></span></span><span class="lfnum" style="color:'+col+'">'+r.lf.toFixed(0)+"%</span></span>"
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.open)+"<small>OPEN SEATS/FLT</small></span>"
+      +"</button>"
+      +'<div class="season'+(isOpen?" open":"")+'">'+(isOpen? seasonHTML(r):"")+"</div>";
+  });
+  cont.innerHTML=html;
+  cont.querySelectorAll(".rowbtn").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const d=+b.dataset.d;
+      state.expanded = state.expanded===d? null : d;
+      renderBoard();
+    });
+  });
+}
+
+function seasonHTML(r){
+  const series = destSeries(state.origin).get(r.d) || [];
+  const oa=A[state.origin];
+  // selected point(s) to highlight
+  let selIdx = new Set();
+  if(state.mode==="month"){ const p=PIDX.get(pointKey(latestYearFor(state.month),state.month)); if(p) selIdx.add(p.i); }
+  else {
+    const t=WEEKS[state.week].getTime()+3.5*864e5;
+    let i2=POINTS.findIndex(p=>p.mid>=t); if(i2<0)i2=POINTS.length-1;
+    selIdx.add(i2); selIdx.add(Math.max(0,POINTS[i2].mid===t?i2:i2-1));
+  }
+  const cells = POINTS.map(p=>{
+    const a=series[p.i];
+    if(!a||a.dep<1) return {p,na:true};
+    const m=metricsAt(a,p);
+    return {p,lf:m.lf,open:m.open};
+  });
+  const avail = cells.filter(c=>!c.na);
+  const maxOpen = Math.max(...avail.map(c=>c.open),1);
+  let best=null; for(const c of avail){ if(!best||c.open>best.open) best=c; }
+  let h='<h4>Trend · <b>'+oa[0]+' → '+r.code+"</b> · Dec ’24 – Mar ’26 · bar height = open seats per flight</h4><div class='strip'>";
+  for(const c of cells){
+    const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
+    const yr = (c.p.m===1||c.p.i===0)? "’"+String(c.p.y).slice(2) : "";
+    if(c.na){ h+='<div class="mcell"><div class="mbar na"></div><div class="mlab">'+lab+'<i>'+yr+'</i></div><div class="mval">—</div></div>'; continue; }
+    const hp=Math.max(6,c.open/maxOpen*100), col=lfColor(c.lf);
+    const cls = (best&&best.p.i===c.p.i?" best":"")+(selIdx.has(c.p.i)?" sel":"");
+    h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+" "+c.p.y+': '+c.lf.toFixed(1)+'% full">'
+      +'<div class="bf" style="height:'+hp.toFixed(0)+'%;background:'+col+'"></div></div>'
+      +'<div class="mlab">'+lab+'<i>'+(yr||"&nbsp;")+'</i></div>'
+      +'<div class="mval">'+Math.round(c.open)+"<small>"+c.lf.toFixed(0)+"%</small></div>";
+    h+="</div>";
+  }
+  h+="</div><div class='legend'>Green outline = emptiest month on record for this route · amber outline = your selected dates. Numbers: open seats/flight and load factor.</div>";
+  return h;
+}
+
+// ---- init ----
+(function(){
+  const p0=POINTS[0], pn=POINTS[POINTS.length-1];
+  document.getElementById("stampRange").textContent =
+    MONTH_ABBR[p0.m-1].charAt(0)+MONTH_ABBR[p0.m-1].slice(1).toLowerCase()+" "+p0.y+" – "+
+    MONTH_ABBR[pn.m-1].charAt(0)+MONTH_ABBR[pn.m-1].slice(1).toLowerCase()+" "+pn.y;
+  setOriginInputLabel();
+  renderMonths();
+  renderWeekOut();
+  renderBoard();
+})();
+</script>
+</body>
+</html>
