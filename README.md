@@ -6,12 +6,6 @@ non-rev / standby trip planning from DOT Form 41 T-100 data.
 **Coverage:** Delta mainline (DL), Endeavor Air (9E), and Delta-marketed SkyWest (OO)
 scheduled passenger service. Rolling ~16-month window, refreshed monthly.
 
-## Hosting on GitHub Pages
-
-1. Push this repo to GitHub.
-2. Settings → Pages → Source: *Deploy from a branch* → `main` / root.
-3. Your site is live at `https://<username>.github.io/<repo>/`.
-
 ## Files
 
 | File | Purpose |
