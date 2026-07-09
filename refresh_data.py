@@ -40,6 +40,7 @@ T100_FIELDS = ["UNIQUE_CARRIER", "ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
 SHARE_CSV = ROOT / "data" / "oo_dl_share.csv"
 DAYS_CSV = ROOT / "data" / "route_days.csv"
 INTL_CSV = ROOT / "data" / "intl_times.csv"
+COORDS_CSV = ROOT / "data" / "airport_coords.csv"
 TEMPLATE = ROOT / "template.html"
 OUTPUT = ROOT / "index.html"
 PLACEHOLDER = "/*__DATA__*/null"
@@ -310,6 +311,32 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
           f"{ok_calls} API calls)")
 
 
+
+def rebuild_coords(session, codes: set[str]) -> None:
+    """Refresh data/airport_coords.csv (lat/lon per airport in the dataset)
+    from the public OurAirports dump; keeps the existing file on failure."""
+    url = "https://davidmegginson.github.io/ourairports-data/airports.csv"
+    try:
+        r = session.get(url, headers=UA, timeout=300)
+        df = pd.read_csv(io.BytesIO(r.content),
+                         usecols=["iata_code", "type", "scheduled_service",
+                                  "latitude_deg", "longitude_deg"])
+    except Exception as e:
+        print(f"  coords refresh failed ({e}); keeping existing file")
+        return
+    df = df[df.iata_code.isin(codes)
+            & df.type.isin(["large_airport", "medium_airport", "small_airport"])]
+    df["pref"] = ((df.scheduled_service == "yes").astype(int) * 3
+                  + df.type.map({"large_airport": 2, "medium_airport": 1}).fillna(0))
+    df = df.sort_values("pref", ascending=False).drop_duplicates("iata_code")
+    out = df[["iata_code", "latitude_deg", "longitude_deg"]].copy()
+    out.columns = ["code", "lat", "lon"]
+    out["lat"] = out.lat.round(3)
+    out["lon"] = out.lon.round(3)
+    out.sort_values("code").to_csv(COORDS_CSV, index=False)
+    print(f"  wrote {COORDS_CSV} ({len(out)}/{len(codes)} airports)")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh-skywest", action="store_true",
@@ -377,6 +404,9 @@ def main() -> int:
     print("Rebuilding operating-days table ...")
     rebuild_route_days(session, window_months)
 
+    print("Refreshing airport coordinates ...")
+    rebuild_coords(session, set(codes))
+
     print("Refreshing international departure times ...")
     try:
         rebuild_intl_times(g, ap_lookup)
@@ -436,8 +466,14 @@ def main() -> int:
     print(f"International times embedded: {len(intl_times)} "
           f"(sampled origins: {len(intl_meta['sampled'])})")
 
+    coords: dict[str, list[float]] = {}
+    if COORDS_CSV.exists():
+        cc = pd.read_csv(COORDS_CSV)
+        coords = {c: [float(la), float(lo)]
+                  for c, la, lo in zip(cc.code, cc.lat, cc.lon) if c in idx}
+
     import json
-    payload = json.dumps({"airports": airports, "rows": rows,
+    payload = json.dumps({"airports": airports, "rows": rows, "coords": coords,
                           "days": days, "dm": dm, "times": times,
                           "intlTimes": intl_times, "intlMeta": intl_meta},
                          separators=(",", ":"))

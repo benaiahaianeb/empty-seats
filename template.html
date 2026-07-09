@@ -114,6 +114,9 @@
   .opennum{font-family:var(--mono);font-weight:600;font-size:19px;text-align:right}
   .opennum small{display:block;font-weight:400;font-size:9.5px;letter-spacing:.06em;color:var(--ink-faint)}
   .opennum .mcap{display:none}
+  .altcode{font-size:13.5px !important}
+  .altrow{cursor:default}
+  .altrow.orig{box-shadow:inset 3px 0 0 var(--board)}
 
   .season{border-bottom:1px solid #1d2a4a;background:#101a33;padding:16px 20px 20px;display:none}
   .season.open{display:block}
@@ -233,6 +236,13 @@
         <button class="chip" data-vibe="city">City breaks</button>
         <button class="chip on" id="gemChip" title="Hide the mega-cities and hubs; show only smaller, less-obvious destinations">Off the beaten path</button>
       </div>
+      <div class="chip-group" id="altGroup" style="display:none">
+        <span class="chip-cap">To</span>
+        <div class="origin-box" style="width:240px">
+          <input id="destInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Type airport or city…" style="font-size:13px;padding:7px 10px">
+          <div id="destMenu" class="origin-menu" role="listbox"></div>
+        </div>
+      </div>
       <div class="spacer"></div>
       <input class="dest-search" id="destSearch" placeholder="Filter destinations…">
     </div>
@@ -241,6 +251,7 @@
   <div class="viewtabs">
     <button class="vtab on" id="tabBoard">Departure board</button>
     <button class="vtab" id="tabTrip">Trip finder</button>
+    <button class="vtab" id="tabAlt">Alternatives</button>
   </div>
 
   <div class="summary" id="summary"></div>
@@ -353,7 +364,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null
 };
 {
   const bdl = A.findIndex(a=>a[0]==="BDL");
@@ -504,6 +515,90 @@ function metricFromSeries(arr){
   const m1=metricsAt(a1,p1), m2=metricsAt(a2,p2);
   const m={}; for(const k of ["fpd","spf","lf","open"]) m[k]=m1[k]+(m2[k]-m1[k])*f;
   return m;
+}
+
+// ---- route alternatives: nearby-airport nonstop options ----
+const COORDS = DATA.coords || {};
+const ALT_MI = 55; // ~1 hour drive, straight-line
+function distMi(a, b){
+  const c1=COORDS[a], c2=COORDS[b];
+  if(!c1 || !c2) return null;
+  const p=Math.PI/180;
+  const h=Math.sin((c2[0]-c1[0])*p/2)**2
+        + Math.cos(c1[0]*p)*Math.cos(c2[0]*p)*Math.sin((c2[1]-c1[1])*p/2)**2;
+  return 2*3959*Math.asin(Math.sqrt(h));
+}
+function nearbyCodes(code){
+  const out=[{code, mi:0}];
+  for(const a of A){
+    if(a[0]===code) continue;
+    const mi=distMi(code, a[0]);
+    if(mi!=null && mi<=ALT_MI) out.push({code:a[0], mi});
+  }
+  return out;
+}
+function computeAlts(){
+  if(state.altDest==null) return null;
+  const O=A[state.origin][0], D=A[state.altDest][0];
+  const dmi=currentDaysIdx();
+  const list=[];
+  for(const no of nearbyCodes(O)){
+    const oi=CODE_IDX.get(no.code);
+    if(oi==null || !byOrigin.has(oi)) continue;
+    const ser=destSeries(oi);
+    for(const nd of nearbyCodes(D)){
+      if(nd.code===no.code) continue;
+      const di=CODE_IDX.get(nd.code);
+      if(di==null) continue;
+      const m=metricFromSeries(ser.get(di));
+      if(!m) continue;
+      if(isDeadRoute(m.fpd, no.code, nd.code, dmi)) continue;
+      list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi, m,
+                 orig:no.code===O && nd.code===D});
+    }
+  }
+  list.sort((a,b)=>b.m.open-a.m.open);
+  return list;
+}
+function renderAlts(){
+  const cont=document.getElementById("rows");
+  const sum=document.getElementById("summary");
+  const oa=A[state.origin];
+  const isWeek=state.mode==="week";
+  const whenTxt=isWeek? "week of "+fmtDate(WEEKS[state.week]) : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
+  const list=computeAlts();
+  if(list==null){
+    sum.innerHTML="<strong>Alternatives</strong> from "+oa[0]+" · pick a destination";
+    cont.innerHTML='<div class="empty">Type a destination airport in the <b>To</b> box above.</div>';
+    return;
+  }
+  const D=A[state.altDest];
+  sum.innerHTML="<strong>"+list.length+" nonstop options</strong> near "+oa[0]+" → "+D[0]+" · "+whenTxt
+    +(isWeek?' <span class="estbadge">EST</span>':"")+" · airports within ~1 hr drive";
+  if(!list.length){
+    cont.innerHTML='<div class="empty">No nonstop service near this pair.</div>';
+    return;
+  }
+  const dmi=currentDaysIdx();
+  let html="";
+  list.forEach(r=>{
+    const col=lfColor(r.m.lf);
+    const co=A[CODE_IDX.get(r.o)], cd=A[CODE_IDX.get(r.d)];
+    let tags="";
+    if(r.orig) tags='<span class="tag" style="color:var(--board);border-color:var(--board)">YOUR ROUTE</span>';
+    else{
+      if(r.om>0) tags+='<span class="tag">'+r.o+" · "+Math.round(r.om)+" MI AWAY</span>";
+      if(r.dm2>0) tags+='<span class="tag">'+r.d+" · "+Math.round(r.dm2)+" MI AWAY</span>";
+    }
+    html+='<div class="rowbtn altrow'+(r.orig?" orig":"")+'">'
+      +'<span class="dcode altcode">'+r.o+'→'+r.d+'</span>'
+      +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>"
+      +schedHTML(r.m.fpd, r.o, r.d, dmi)
+      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+col+'"></span></span><span class="lfnum" style="color:'+col+'">'+r.m.lf.toFixed(0)+"%</span></span>"
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.m.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>'
+      +"</div>";
+  });
+  cont.innerHTML=html;
 }
 
 function computeTrips(){
@@ -709,6 +804,35 @@ om.addEventListener("mousedown",e=>{
   om.classList.remove("open"); setOriginInputLabel(); renderBoard();
 });
 
+// ---- alternatives destination picker ----
+const dIn = document.getElementById("destInput");
+const dMenu = document.getElementById("destMenu");
+const destSeats = new Map();
+for(const r of rows){ destSeats.set(r[1],(destSeats.get(r[1])||0)+r[5]); }
+const destList = [...destSeats.keys()].sort((a,b)=>(destSeats.get(b)||0)-(destSeats.get(a)||0));
+function openDestMenu(q){
+  const ql=(q||"").trim().toLowerCase();
+  const matches = destList.filter(idx=>{
+    const a=A[idx]; return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql);
+  });
+  dMenu.innerHTML = matches.map(idx=>{
+    const a=A[idx];
+    return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
+  }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
+  dMenu.classList.add("open");
+}
+dIn.addEventListener("focus",()=>{ dIn.select(); openDestMenu(""); });
+dIn.addEventListener("input",()=>openDestMenu(dIn.value));
+dIn.addEventListener("blur",()=>setTimeout(()=>{ dMenu.classList.remove("open");
+  if(state.altDest!=null){ const a=A[state.altDest]; dIn.value=a[0]+" — "+a[1]; } },150));
+dMenu.addEventListener("mousedown",e=>{
+  const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
+  state.altDest=+opt.dataset.idx;
+  dMenu.classList.remove("open");
+  const a=A[state.altDest]; dIn.value=a[0]+" — "+a[1];
+  renderBoard();
+});
+
 // ---- filters ----
 document.getElementById("geoGroup").addEventListener("click",e=>{
   const b=e.target.closest("[data-geo]"); if(!b) return;
@@ -747,16 +871,19 @@ function setView(v){
   state.view=v; state.expanded=null;
   document.getElementById("tabBoard").classList.toggle("on",v==="board");
   document.getElementById("tabTrip").classList.toggle("on",v==="trip");
-  const trip = v==="trip";
-  document.getElementById("geoGroup").style.display = trip? "none":"";
-  document.getElementById("freqGroup").style.display = trip? "none":"";
-  document.getElementById("destSearch").style.display = trip? "none":"";
-  document.getElementById("vibeGroup").style.display = trip? "":"none";
-  document.querySelector(".thead").style.display = trip? "none":"";
+  document.getElementById("tabAlt").classList.toggle("on",v==="alt");
+  const board = v==="board";
+  document.getElementById("geoGroup").style.display = board? "":"none";
+  document.getElementById("freqGroup").style.display = board? "":"none";
+  document.getElementById("destSearch").style.display = board? "":"none";
+  document.getElementById("vibeGroup").style.display = v==="trip"? "":"none";
+  document.getElementById("altGroup").style.display = v==="alt"? "":"none";
+  document.querySelector(".thead").style.display = board? "":"none";
   renderBoard();
 }
 document.getElementById("tabBoard").onclick=()=>setView("board");
 document.getElementById("tabTrip").onclick=()=>setView("trip");
+document.getElementById("tabAlt").onclick=()=>setView("alt");
 document.getElementById("gemChip").addEventListener("click",e=>{
   state.gemsOnly=!state.gemsOnly;
   e.currentTarget.classList.toggle("on",state.gemsOnly);
@@ -772,6 +899,7 @@ document.getElementById("vibeGroup").addEventListener("click",e=>{
 // ---- board ----
 function renderBoard(){
   if(state.view==="trip"){ renderTrips(); return; }
+  if(state.view==="alt"){ renderAlts(); return; }
   const isWeek = state.mode==="week";
   const list = isWeek? computeWeek(state.origin,state.week) : computeMonth(state.origin,state.month);
   const cont = document.getElementById("rows");
