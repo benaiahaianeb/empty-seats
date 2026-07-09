@@ -109,17 +109,46 @@ def rebuild_skywest_share(session: requests.Session, latest_year: int) -> None:
     print(f"  wrote {SHARE_CSV} ({len(alls)} segments)")
 
 
+def _time_banks(minutes: list[int]) -> list[int]:
+    """Cluster a month of scheduled departure minutes into 'normal' daily banks.
+
+    Times within 40 minutes chain into one cluster; clusters with fewer than
+    40% of the busiest cluster's flights (extra sections, one-offs) are
+    dropped. Returns HHMM ints, one per bank, rounded to 5 minutes.
+    """
+    ts = sorted(minutes)
+    clusters, cur = [], [ts[0]]
+    for t in ts[1:]:
+        if t - cur[-1] > 40:
+            clusters.append(cur)
+            cur = [t]
+        else:
+            cur.append(t)
+    clusters.append(cur)
+    maxc = max(len(c) for c in clusters)
+    out = []
+    for c in clusters:
+        if len(c) < max(1, 0.4 * maxc):
+            continue
+        med = c[len(c) // 2]
+        med = int(round(med / 5.0) * 5) % 1440
+        out.append(med // 60 * 100 + med % 60)
+    return sorted(set(out))
+
+
 def rebuild_route_days(session, months: list[tuple[int, int]],
                        limit: int | None = None) -> None:
     """Incrementally build data/route_days.csv: per-route, per-month day-of-week
-    operating masks for DL-marketed flights, from Marketing-Carrier on-time data
-    (domestic routes only). mask bit 0 = Monday; a weekday counts if the route
-    saw at least one flight (operated or cancelled) on that weekday that month.
+    operating masks and normal scheduled departure banks for DL-marketed flights,
+    from Marketing-Carrier on-time data (domestic routes only). mask bit 0 =
+    Monday; a weekday counts if the route saw at least one flight (operated or
+    cancelled) on that weekday that month. times is a space-separated list of
+    HHMM departure banks (local time).
 
     Months already present in the CSV are kept, months outside the window are
     dropped, and only missing months are downloaded (typically one per run).
     """
-    cols = ["o", "d", "ym", "mask"]
+    cols = ["o", "d", "ym", "mask", "times"]
     have = pd.DataFrame(columns=cols)
     if DAYS_CSV.exists():
         old = pd.read_csv(DAYS_CSV)
@@ -146,13 +175,20 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
         csv_name = [n for n in zf.namelist() if n.lower().endswith(".csv")][0]
         df = pd.read_csv(zf.open(csv_name),
                          usecols=["FlightDate", "Marketing_Airline_Network",
-                                  "Origin", "Dest"], dtype=str)
+                                  "Origin", "Dest", "CRSDepTime"], dtype=str)
         df = df[df.Marketing_Airline_Network == "DL"]
-        df = df.assign(dow=pd.to_datetime(df.FlightDate).dt.dayofweek)
+        t = pd.to_numeric(df.CRSDepTime, errors="coerce")
+        df = df.assign(dow=pd.to_datetime(df.FlightDate).dt.dayofweek,
+                       mins=(t // 100) % 24 * 60 + t % 100)
         masks = df.groupby(["Origin", "Dest"]).dow.apply(
-            lambda s: sum(1 << int(w) for w in set(s)))
-        add = masks.reset_index()
-        add.columns = ["o", "d", "mask"]
+            lambda s: sum(1 << int(w) for w in set(s))).rename("mask")
+        tdf = df[df.mins.notna()].copy()
+        tdf["mins"] = tdf.mins.astype(int)
+        times = tdf.groupby(["Origin", "Dest"]).mins.apply(
+            lambda s: " ".join(str(x) for x in _time_banks(list(s)))).rename("times")
+        add = pd.concat([masks, times], axis=1).reset_index()
+        add.columns = ["o", "d", "mask", "times"]
+        add["times"] = add.times.fillna("")
         add["ym"] = f"{y}-{m:02d}"
         frames.append(add[cols])
         done += 1
@@ -236,20 +272,30 @@ def main() -> int:
     dm = [f"{y}-{mo:02d}" for y, mo in window_months]
     dmi = {s: i for i, s in enumerate(dm)}
     days: dict[str, list[int]] = {}
+    times: dict[str, list] = {}
     if DAYS_CSV.exists():
         dd = pd.read_csv(DAYS_CSV)
         route_set = set(zip(g.ORIGIN, g.DEST))
-        tmp: dict[tuple[str, str], list[int]] = {}
-        for o, d, ym, mk in zip(dd.o, dd.d, dd.ym, dd["mask"]):
-            if (o, d) in route_set and ym in dmi:
-                tmp.setdefault((o, d), [0] * len(dm))[dmi[ym]] = int(mk)
-        days = {f"{o}-{d}": arr for (o, d), arr in tmp.items()
+        has_t = "times" in dd.columns
+        tmp_d: dict[tuple[str, str], list[int]] = {}
+        tmp_t: dict[tuple[str, str], list] = {}
+        tvals = dd.times if has_t else [""] * len(dd)
+        for o, d, ym, mk, tv in zip(dd.o, dd.d, dd.ym, dd["mask"], tvals):
+            if (o, d) not in route_set or ym not in dmi:
+                continue
+            tmp_d.setdefault((o, d), [0] * len(dm))[dmi[ym]] = int(mk)
+            tv = str(tv).strip()
+            if tv and tv != "nan":
+                tmp_t.setdefault((o, d), [None] * len(dm))[dmi[ym]] = \
+                    [int(x) for x in tv.split()]
+        days = {f"{o}-{d}": arr for (o, d), arr in tmp_d.items()
                 if any(0 < v < 127 for v in arr)}
-    print(f"Operating-days routes embedded: {len(days)}")
+        times = {f"{o}-{d}": arr for (o, d), arr in tmp_t.items()}
+    print(f"Embedded: {len(days)} day-limited routes, {len(times)} routes with times")
 
     import json
     payload = json.dumps({"airports": airports, "rows": rows,
-                          "days": days, "dm": dm},
+                          "days": days, "dm": dm, "times": times},
                          separators=(",", ":"))
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:

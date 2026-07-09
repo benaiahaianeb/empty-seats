@@ -101,6 +101,7 @@
   .tag{font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:.08em;border:1px solid var(--line);
     border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px;white-space:nowrap}
   .tag.freq{color:var(--ink-dim);border-color:#31446f;background:#16223f}
+  .times{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:2px;letter-spacing:.02em}
   .num{font-family:var(--mono);font-size:14px;text-align:right;color:var(--ink)}
 
   .gauge{display:flex;align-items:center;gap:10px;padding:0 14px}
@@ -388,7 +389,16 @@ function freqLabel(fpd){
 // operating days for sub-daily routes, per window month (domestic routes only).
 // DATA.days: "ORG-DST" -> array of 7-bit masks (bit 0 = Monday) aligned to DATA.dm.
 const DAYS = DATA.days || {};
+const TIMES = DATA.times || {};
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
+const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
+function timesLine(o, d, dmi){
+  if(dmi<0) return "";
+  const a = TIMES[o+"-"+d];
+  const tl = a? a[dmi] : null;
+  if(!tl || !tl.length) return "";
+  return '<span class="times">'+tl.map(fmtT).join(" · ")+"</span>";
+}
 const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
 function daysLabel(mask){
   const on=[], off=[];
@@ -749,7 +759,7 @@ function renderBoard(){
     html += '<button class="rowbtn" data-d="'+r.d+'" aria-expanded="'+isOpen+'">'
       +'<span class="rk">'+(i+1)+"</span>"
       +'<span class="dcode">'+r.code+"</span>"
-      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+'<span class="tag freq">'+freqTxt(r.fpd,oa[0],r.code,dmi)+"</span></span>"
+      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+'<span class="tag freq">'+freqTxt(r.fpd,oa[0],r.code,dmi)+"</span>"+timesLine(oa[0],r.code,dmi)+"</span>"
       +'<span class="num hidem">'+r.fpd.toFixed(1)+"</span>"
       +'<span class="num hidem">'+Math.round(r.spf)+"</span>"
       +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+col+'"></span><span class="ticks"></span></span><span class="lfnum" style="color:'+col+'">'+r.lf.toFixed(0)+"%</span></span>"
