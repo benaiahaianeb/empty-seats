@@ -520,6 +520,8 @@ function metricFromSeries(arr){
 // ---- route alternatives: nearby-airport nonstop options ----
 const COORDS = DATA.coords || {};
 const ALT_MI = 55; // ~1 hour drive, straight-line
+// manual same-area exceptions beyond the radius (kept symmetric)
+const ALT_EXTRA = {BOS:["BDL"], PVD:["BDL"], BDL:["BOS","PVD"]};
 function distMi(a, b){
   const c1=COORDS[a], c2=COORDS[b];
   if(!c1 || !c2) return null;
@@ -534,6 +536,10 @@ function nearbyCodes(code){
     if(a[0]===code) continue;
     const mi=distMi(code, a[0]);
     if(mi!=null && mi<=ALT_MI) out.push({code:a[0], mi});
+  }
+  for(const c of (ALT_EXTRA[code]||[])){
+    if(!out.some(x=>x.code===c) && CODE_IDX.has(c))
+      out.push({code:c, mi:distMi(code, c)||0});
   }
   return out;
 }
