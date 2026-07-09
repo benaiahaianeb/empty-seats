@@ -204,13 +204,15 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
 
 
 def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
-    """Snapshot normal departure times for Delta international routes.
+    """Snapshot normal departure times and operating days for Delta
+    international routes.
 
     DOT on-time data (source of domestic times) covers domestic flights only,
-    so international times come from AeroDataBox FIDS departure boards (API key
-    in the AERODATABOX_KEY env var; RapidAPI or API.market). Samples two
-    upcoming days at each US gateway with international Delta service and
-    writes banks to data/intl_times.csv. Skips gracefully without a key.
+    so international schedules come from AeroDataBox FIDS departure boards
+    (API key in the AERODATABOX_KEY env var; RapidAPI or API.market). Samples
+    the next 7 days at the top international Delta gateways so weekly patterns
+    are captured; routes not seen this month (e.g. opposite-season service)
+    keep their previous entry. Skips gracefully without a key.
     """
     import os
     key = os.environ.get("AERODATABOX_KEY", "").strip()
@@ -224,15 +226,15 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
         print("  no international routes found")
         return
     origins = (gi.groupby("ORIGIN").seats.sum()
-               .sort_values(ascending=False).head(15).index.tolist())
+               .sort_values(ascending=False).head(10).index.tolist())
     hosts = [("aerodatabox.p.rapidapi.com",
               {"X-RapidAPI-Key": key, "X-RapidAPI-Host": "aerodatabox.p.rapidapi.com"}),
              ("prod.api.market/api/v1/aedbx/aerodatabox",
               {"x-api-market-key": key})]
-    days = [dt.date.today() + dt.timedelta(days=1),
-            dt.date.today() + dt.timedelta(days=4)]
+    days = [dt.date.today() + dt.timedelta(days=k) for k in range(1, 8)]
     windows = [("00:00", "11:59"), ("12:00", "23:59")]
-    banks: dict[tuple[str, str], list[int]] = {}
+    mins: dict[tuple[str, str], list[int]] = {}
+    dows: dict[tuple[str, str], set[int]] = {}
     hi, ok_calls = 0, 0
     for o in origins:
         for day in days:
@@ -271,18 +273,31 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
                     m = re.search(r"[ T](\d{2}):(\d{2})", tloc)
                     if not dest or dest not in intl_dest or not m:
                         continue
-                    banks.setdefault((o, dest), []).append(
+                    mins.setdefault((o, dest), []).append(
                         int(m.group(1)) * 60 + int(m.group(2)))
-    if not banks:
+                    dows.setdefault((o, dest), set()).add(day.weekday())
+    if not mins:
         print(f"  no international times retrieved ({ok_calls} calls); "
               "keeping existing intl_times.csv")
         return
-    rows = [(o, d, " ".join(str(x) for x in _time_banks(mins)),
+    old = pd.DataFrame(columns=["o", "d", "mask", "times", "asof"])
+    if INTL_CSV.exists():
+        prev = pd.read_csv(INTL_CSV)
+        if "mask" not in prev.columns:
+            prev["mask"] = 0
+        old = prev[["o", "d", "mask", "times", "asof"]]
+    sampled = set(mins)
+    keep = old[[(o, d) not in sampled for o, d in zip(old.o, old.d)]]
+    rows = [(o, d, sum(1 << w for w in dows[(o, d)]),
+             " ".join(str(x) for x in _time_banks(mins[(o, d)])),
              str(dt.date.today()))
-            for (o, d), mins in sorted(banks.items())]
-    pd.DataFrame(rows, columns=["o", "d", "times", "asof"]).to_csv(
-        INTL_CSV, index=False)
-    print(f"  wrote {INTL_CSV} ({len(rows)} intl routes, {ok_calls} API calls)")
+            for (o, d) in sorted(sampled)]
+    out = pd.concat(
+        [keep, pd.DataFrame(rows, columns=["o", "d", "mask", "times", "asof"])],
+        ignore_index=True).sort_values(["o", "d"])
+    out.to_csv(INTL_CSV, index=False)
+    print(f"  wrote {INTL_CSV} ({len(rows)} sampled + {len(keep)} carried, "
+          f"{ok_calls} API calls)")
 
 
 def main() -> int:
@@ -386,10 +401,15 @@ def main() -> int:
     if INTL_CSV.exists():
         it = pd.read_csv(INTL_CSV)
         rset = set(zip(g.ORIGIN, g.DEST))
-        for o, d, tv in zip(it.o, it.d, it.times):
+        imasks = it["mask"] if "mask" in it.columns else [0] * len(it)
+        for o, d, tv, mk in zip(it.o, it.d, it.times, imasks):
             tv = str(tv).strip()
             if (o, d) in rset and tv and tv != "nan":
-                intl_times[f"{o}-{d}"] = [int(x) for x in tv.split()]
+                try:
+                    mkv = int(mk)
+                except (TypeError, ValueError):
+                    mkv = 0
+                intl_times[f"{o}-{d}"] = [mkv] + [int(x) for x in tv.split()]
     print(f"International times embedded: {len(intl_times)}")
 
     import json

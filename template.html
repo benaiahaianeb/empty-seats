@@ -403,7 +403,12 @@ function schedHTML(fpd, o, d, dmi){
   const parts = [];
   if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) parts.push(dl); }
   if(tl && tl.length) parts.push(tl.map(fmtT).join(" · "));
-  else if(ITIMES[key] && ITIMES[key].length) parts.push(ITIMES[key].map(fmtT).join(" · "));
+  else if(ITIMES[key] && ITIMES[key].length>1){
+    // intl snapshot entry: [dayMask, hhmm, hhmm, ...]
+    const ia=ITIMES[key], imk=ia[0];
+    if(imk>0 && imk<127){ const dl=daysLabel(imk); if(dl) parts.push(dl); }
+    parts.push(ia.slice(1).map(fmtT).join(" · "));
+  }
   return '<span class="sched"><b>'+freqLabel(fpd)+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
 }
