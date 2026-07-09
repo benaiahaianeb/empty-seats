@@ -390,11 +390,20 @@ const TIMES = DATA.times || {};
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
 const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
 function schedHTML(fpd, o, d, dmi){
-  const f = freqTxt(fpd, o, d, dmi);
-  const a = TIMES[o+"-"+d];
-  const tl = (dmi>=0 && a)? a[dmi] : null;
-  return '<span class="sched'+(f==="IRREG"?" irr":"")+'"><b>'+f+'</b>'
-    +(tl && tl.length? '<small>'+tl.map(fmtT).join(" · ")+"</small>" : "")+"</span>";
+  const key = o+"-"+d;
+  const mk = (dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
+  const tl = (dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
+  if(fpd<0.9 && !mk && !(tl && tl.length)){
+    // domestic route absent from scheduled-service records: charter/diversion ops
+    const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
+    if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US")
+      return '<span class="sched irr"><b>IRREG</b></span>';
+  }
+  const parts = [];
+  if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) parts.push(dl); }
+  if(tl && tl.length) parts.push(tl.map(fmtT).join(" · "));
+  return '<span class="sched"><b>'+freqLabel(fpd)+'</b>'
+    +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
 }
 const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
 function daysLabel(mask){
