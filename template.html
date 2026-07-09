@@ -104,6 +104,7 @@
   .sched b{font-weight:600;letter-spacing:.03em}
   .sched.irr b{font-weight:400;color:var(--ink-faint)}
   .sched small{display:block;font-size:11.5px;color:var(--ink-dim);margin-top:1px}
+  .sched .noflying{color:var(--ink-faint)}
 
   .gauge{display:flex;align-items:center;gap:10px;padding:0 14px}
   .cabin{flex:1;height:12px;border-radius:3px;background:#0b1226;border:1px solid var(--line);position:relative;overflow:hidden}
@@ -388,6 +389,8 @@ function freqLabel(fpd){
 const DAYS = DATA.days || {};
 const TIMES = DATA.times || {};
 const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
+const IMETA = DATA.intlMeta || {label:"", sampled:[]};
+const ISAMPLED = new Set(IMETA.sampled);
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
 const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
 function schedHTML(fpd, o, d, dmi){
@@ -408,6 +411,12 @@ function schedHTML(fpd, o, d, dmi){
     const ia=ITIMES[key], imk=ia[0];
     if(imk>0 && imk<127){ const dl=daysLabel(imk); if(dl) parts.push(dl); }
     parts.push(ia.slice(1).map(fmtT).join(" · "));
+  } else {
+    // intl route absent from the sampled current schedule
+    const di2=CODE_IDX.get(d), oi2=CODE_IDX.get(o);
+    const intl = di2!=null && oi2!=null && (A[di2][2]!=="US" || A[oi2][2]!=="US");
+    if(intl && ISAMPLED.has(o) && IMETA.label)
+      parts.push('<span class="noflying">NOT FLYING '+IMETA.label+'</span>');
   }
   return '<span class="sched"><b>'+freqLabel(fpd)+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";

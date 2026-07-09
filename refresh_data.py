@@ -176,8 +176,12 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
         csv_name = [n for n in zf.namelist() if n.lower().endswith(".csv")][0]
         df = pd.read_csv(zf.open(csv_name),
                          usecols=["FlightDate", "Marketing_Airline_Network",
-                                  "Origin", "Dest", "CRSDepTime"], dtype=str)
-        df = df[df.Marketing_Airline_Network == "DL"]
+                                  "Operating_Airline ", "Origin", "Dest",
+                                  "CRSDepTime"], dtype=str)
+        # match the T-100 load coverage: DL-marketed AND operated by
+        # mainline/Endeavor/SkyWest (Republic etc. are excluded from loads)
+        df = df[(df.Marketing_Airline_Network == "DL")
+                & (df["Operating_Airline "].isin(["DL", "9E", "OO"]))]
         t = pd.to_numeric(df.CRSDepTime, errors="coerce")
         df = df.assign(dow=pd.to_datetime(df.FlightDate).dt.dayofweek,
                        mins=(t // 100) % 24 * 60 + t % 100)
@@ -410,12 +414,26 @@ def main() -> int:
                 except (TypeError, ValueError):
                     mkv = 0
                 intl_times[f"{o}-{d}"] = [mkv] + [int(x) for x in tv.split()]
-    print(f"International times embedded: {len(intl_times)}")
+    intl_meta = {"label": "", "sampled": []}
+    if INTL_CSV.exists():
+        it2 = pd.read_csv(INTL_CSV)
+        if len(it2):
+            latest = str(it2["asof"].max())
+            try:
+                ad = dt.date.fromisoformat(latest)
+                mons = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+                intl_meta["label"] = f"{mons[ad.month-1]} \u2019{str(ad.year)[2:]}"
+                intl_meta["sampled"] = sorted(set(it2[it2["asof"] == latest].o))
+            except ValueError:
+                pass
+    print(f"International times embedded: {len(intl_times)} "
+          f"(sampled origins: {len(intl_meta['sampled'])})")
 
     import json
     payload = json.dumps({"airports": airports, "rows": rows,
                           "days": days, "dm": dm, "times": times,
-                          "intlTimes": intl_times},
+                          "intlTimes": intl_times, "intlMeta": intl_meta},
                          separators=(",", ":"))
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:
