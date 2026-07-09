@@ -411,12 +411,6 @@ function schedHTML(fpd, o, d, dmi){
     const ia=ITIMES[key], imk=ia[0];
     if(imk>0 && imk<127){ const dl=daysLabel(imk); if(dl) parts.push(dl); }
     parts.push(ia.slice(1).map(fmtT).join(" · "));
-  } else {
-    // intl route absent from the sampled current schedule
-    const di2=CODE_IDX.get(d), oi2=CODE_IDX.get(o);
-    const intl = di2!=null && oi2!=null && (A[di2][2]!=="US" || A[oi2][2]!=="US");
-    if(intl && ISAMPLED.has(o) && IMETA.label)
-      parts.push('<span class="noflying">NOT FLYING '+IMETA.label+'</span>');
   }
   return '<span class="sched"><b>'+freqLabel(fpd)+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
@@ -441,6 +435,22 @@ function currentDaysIdx(){
   if(!p) return -1;
   const k = p.y+"-"+String(p.m).padStart(2,"0");
   return DM_IDX.has(k)? DM_IDX.get(k) : -1;
+}
+// planning tool: hide flights that can no longer be taken.
+// domestic month with no scheduled-service record = charter/diversion ops;
+// intl route absent from the sampled current+seasonal schedule = discontinued.
+function isDeadRoute(fpd, o, d, dmi){
+  const key = o+"-"+d;
+  const oi = CODE_IDX.get(o), di = CODE_IDX.get(d);
+  if(oi==null || di==null) return false;
+  const dom = A[oi][2]==="US" && A[di][2]==="US";
+  if(dom){
+    if(fpd>=0.9 || dmi<0) return false;
+    const mk = DAYS[key]? DAYS[key][dmi] : 0;
+    const tl = TIMES[key]? TIMES[key][dmi] : null;
+    return !mk && !(tl && tl.length);
+  }
+  return ISAMPLED.has(o) && !(ITIMES[key] && ITIMES[key].length>1);
 }
 function freqTxt(fpd, o, d, dmi){
   if(fpd<0.9 && dmi>=0){
@@ -507,6 +517,7 @@ function computeTrips(){
     hubSer[h] = {idx:hi, ser:destSeries(hi), m:metricFromSeries(oSer.get(hi))};
   }
   const MINF = 0.4; // ~3x/week per leg minimum for realistic standby
+  const dmi = currentDaysIdx();
   const out = [];
   for(const code in VIBES){
     const tags = VIBES[code];
@@ -516,14 +527,14 @@ function computeTrips(){
     if(d==null || d===oIdx) continue;
     const options = [];
     const direct = metricFromSeries(oSer.get(d));
-    if(direct && direct.fpd>=MINF)
+    if(direct && direct.fpd>=MINF && !isDeadRoute(direct.fpd,oCode,code,dmi))
       options.push({legs:[{f:oCode,t:code,m:direct}], bn:direct.open, direct:true});
     for(const h in hubSer){
       if(h===code) continue;
       const m1 = hubSer[h].m;
-      if(!m1 || m1.fpd<MINF) continue;
+      if(!m1 || m1.fpd<MINF || isDeadRoute(m1.fpd,oCode,h,dmi)) continue;
       const m2 = metricFromSeries(hubSer[h].ser.get(d));
-      if(!m2 || m2.fpd<MINF) continue;
+      if(!m2 || m2.fpd<MINF || isDeadRoute(m2.fpd,h,code,dmi)) continue;
       options.push({legs:[{f:oCode,t:h,m:m1},{f:h,t:code,m:m2}], bn:Math.min(m1.open,m2.open), direct:false});
     }
     if(!options.length) continue;
@@ -590,11 +601,13 @@ function computeMonth(originIdx, month){
   const year = latestYearFor(month);
   const p = PIDX.get(pointKey(year,month));
   const series = destSeries(originIdx);
+  const dmi = currentDaysIdx(), oCode = A[originIdx][0];
   const out=[];
   for(const [d,arr] of series){
     const a = arr[p.i]; if(!a || a.dep<1 || a.seats<1) continue;
     const m = metricsAt(a,p);
     if(!passesGeoFreq(d,m)) continue;
+    if(isDeadRoute(m.fpd, oCode, A[d][0], dmi)) continue;
     out.push(buildRow(d,m,{year}));
   }
   return finish(out);
@@ -609,6 +622,7 @@ function computeWeek(originIdx, wi){
   const p1=POINTS[i1], p2=POINTS[i2];
   const f = p2.mid===p1.mid? 0 : (t-p1.mid)/(p2.mid-p1.mid);
   const series = destSeries(originIdx);
+  const dmi = currentDaysIdx(), oCode = A[originIdx][0];
   const out=[];
   for(const [d,arr] of series){
     const a1=arr[i1], a2=arr[i2];
@@ -616,6 +630,7 @@ function computeWeek(originIdx, wi){
     const m1=metricsAt(a1,p1), m2=metricsAt(a2,p2);
     const m={}; for(const k of ["fpd","spf","lf","open"]) m[k]=m1[k]+(m2[k]-m1[k])*f;
     if(!passesGeoFreq(d,m)) continue;
+    if(isDeadRoute(m.fpd, oCode, A[d][0], dmi)) continue;
     out.push(buildRow(d,m,{p1,p2}));
   }
   return finish(out);

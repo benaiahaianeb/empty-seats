@@ -235,7 +235,12 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
               {"X-RapidAPI-Key": key, "X-RapidAPI-Host": "aerodatabox.p.rapidapi.com"}),
              ("prod.api.market/api/v1/aedbx/aerodatabox",
               {"x-api-market-key": key})]
-    days = [dt.date.today() + dt.timedelta(days=k) for k in range(1, 8)]
+    block = [dt.date.today() + dt.timedelta(days=k) for k in range(1, 8)]
+    # far-future probes catch opposite-season routes (existence + rough times);
+    # higher tiers may reject them, which is fine
+    probes = [dt.date.today() + dt.timedelta(days=k) for k in (120, 180)]
+    days = block + probes
+    blockset = set(block)
     windows = [("00:00", "11:59"), ("12:00", "23:59")]
     mins: dict[tuple[str, str], list[int]] = {}
     dows: dict[tuple[str, str], set[int]] = {}
@@ -279,7 +284,8 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
                         continue
                     mins.setdefault((o, dest), []).append(
                         int(m.group(1)) * 60 + int(m.group(2)))
-                    dows.setdefault((o, dest), set()).add(day.weekday())
+                    if day in blockset:  # masks only from the consecutive week
+                        dows.setdefault((o, dest), set()).add(day.weekday())
     if not mins:
         print(f"  no international times retrieved ({ok_calls} calls); "
               "keeping existing intl_times.csv")
@@ -292,7 +298,7 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
         old = prev[["o", "d", "mask", "times", "asof"]]
     sampled = set(mins)
     keep = old[[(o, d) not in sampled for o, d in zip(old.o, old.d)]]
-    rows = [(o, d, sum(1 << w for w in dows[(o, d)]),
+    rows = [(o, d, sum(1 << w for w in dows.get((o, d), set())),
              " ".join(str(x) for x in _time_banks(mins[(o, d)])),
              str(dt.date.today()))
             for (o, d) in sorted(sampled)]
