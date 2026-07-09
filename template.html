@@ -83,7 +83,7 @@
   .summary .hl{color:var(--open)}
 
   .board{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .thead{display:grid;grid-template-columns:44px 92px 1fr 86px 86px 210px 110px;gap:0;align-items:center;
+  .thead{display:grid;grid-template-columns:92px 1fr 200px 210px 110px;gap:0;align-items:center;
     padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel-2)}
   .th{font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
     cursor:pointer;user-select:none;background:none;border:none;text-align:left;padding:0}
@@ -92,7 +92,7 @@
   .th.active{color:var(--board)}
   .th .arr{font-family:var(--mono);font-size:10px}
 
-  .rowbtn{width:100%;display:grid;grid-template-columns:44px 92px 1fr 86px 86px 210px 110px;align-items:center;
+  .rowbtn{width:100%;display:grid;grid-template-columns:92px 1fr 200px 210px 110px;align-items:center;
     padding:11px 16px;border:none;border-bottom:1px solid #1d2a4a;background:transparent;color:var(--ink);cursor:pointer;text-align:left}
   .rowbtn:hover{background:#182449}
   .rk{font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
@@ -100,14 +100,14 @@
   .dcity{font-size:14px;color:var(--ink-dim);padding-right:10px;line-height:1.3}
   .tag{font-family:var(--mono);font-size:10px;color:var(--ink-faint);letter-spacing:.08em;border:1px solid var(--line);
     border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px;white-space:nowrap}
-  .tag.freq{color:var(--ink-dim);border-color:#31446f;background:#16223f}
-  .times{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:2px;letter-spacing:.02em}
-  .num{font-family:var(--mono);font-size:14px;text-align:right;color:var(--ink)}
+  .sched{font-family:var(--mono);font-size:13.5px;color:var(--ink);padding-right:14px;line-height:1.35}
+  .sched b{font-weight:600;letter-spacing:.03em}
+  .sched.irr b{font-weight:400;color:var(--ink-faint)}
+  .sched small{display:block;font-size:11.5px;color:var(--ink-dim);margin-top:1px}
 
   .gauge{display:flex;align-items:center;gap:10px;padding:0 14px}
   .cabin{flex:1;height:12px;border-radius:3px;background:#0b1226;border:1px solid var(--line);position:relative;overflow:hidden}
   .fill{position:absolute;inset:0;right:auto;border-radius:2px}
-  .cabin .ticks{position:absolute;inset:0;background-image:repeating-linear-gradient(90deg,transparent 0 9%,#0d1424 9% 10%)}
   .lfnum{font-family:var(--mono);font-size:13px;width:52px;text-align:right}
 
   .opennum{font-family:var(--mono);font-weight:600;font-size:19px;text-align:right}
@@ -133,9 +133,9 @@
   @media(max-width:860px){
     .thead{display:none}
     .opennum .mcap{display:block}
-    .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "gauge gauge gauge";row-gap:8px}
-    .rk,.hidem{display:none}
+    .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "sched sched sched" "gauge gauge gauge";row-gap:8px}
     .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
+    .sched{grid-area:sched;padding:0}
     .gauge{grid-area:gauge;padding:0}
     .strip{grid-template-columns:repeat(8,1fr);row-gap:12px}
   }
@@ -149,7 +149,7 @@
     color:var(--ink-dim);padding:9px 18px 7px;cursor:pointer}
   .vtab.on{background:var(--panel-2);color:var(--board);border-color:var(--board)}
   .summary{margin-top:14px}
-  .triprow{width:100%;display:grid;grid-template-columns:44px 240px 1fr 130px;align-items:center;
+  .triprow{width:100%;display:grid;grid-template-columns:240px 1fr 130px;align-items:center;
     padding:13px 16px;border-bottom:1px solid #1d2a4a;color:var(--ink);text-align:left}
   .legs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-right:10px}
   .leg{font-family:var(--mono);font-size:12.5px;background:#0f1830;border:1px solid var(--line);border-radius:6px;padding:4px 8px;white-space:nowrap}
@@ -158,7 +158,6 @@
   .legarrow{color:var(--ink-faint);font-family:var(--mono);font-size:12px}
   @media(max-width:860px){
     .triprow{grid-template-columns:1fr 110px;grid-template-areas:"dest open" "legs legs";row-gap:8px}
-    .triprow .rk{display:none}
     .trdest{grid-area:dest}.legs{grid-area:legs}.triprow .opennum{grid-area:open}
   }
   @media (prefers-reduced-motion:no-preference){
@@ -247,11 +246,9 @@
 
   <div class="board">
     <div class="thead">
-      <span class="th">#</span>
       <button class="th" data-sort="code">Dest</button>
       <span class="th">City</span>
-      <button class="th right" data-sort="fpd">Flts/day <span class="arr"></span></button>
-      <button class="th right" data-sort="spf">Seats/flt <span class="arr"></span></button>
+      <button class="th" data-sort="fpd">Schedule <span class="arr"></span></button>
       <button class="th" data-sort="lf" style="padding-left:14px">Cabin fill (load factor) <span class="arr"></span></button>
       <button class="th right active" data-sort="open">Open/flt <span class="arr">▼</span></button>
     </div>
@@ -392,12 +389,12 @@ const DAYS = DATA.days || {};
 const TIMES = DATA.times || {};
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
 const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
-function timesLine(o, d, dmi){
-  if(dmi<0) return "";
+function schedHTML(fpd, o, d, dmi){
+  const f = freqTxt(fpd, o, d, dmi);
   const a = TIMES[o+"-"+d];
-  const tl = a? a[dmi] : null;
-  if(!tl || !tl.length) return "";
-  return '<span class="times">'+tl.map(fmtT).join(" · ")+"</span>";
+  const tl = (dmi>=0 && a)? a[dmi] : null;
+  return '<span class="sched'+(f==="IRREG"?" irr":"")+'"><b>'+f+'</b>'
+    +(tl && tl.length? '<small>'+tl.map(fmtT).join(" · ")+"</small>" : "")+"</span>";
 }
 const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
 function daysLabel(mask){
@@ -543,7 +540,6 @@ function renderTrips(){
         '<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
     }).join("");
     html += '<div class="triprow">'
-      +'<span class="rk">'+(i+1)+"</span>"
       +'<span class="trdest"><span class="dcode">'+r.code+'</span><span class="dcity" style="display:block">'+esc(r.city)
         +(r.legs.length===1?'<span class="tag">NONSTOP</span>':"")+"</span></span>"
       +'<span class="legs">'+legHtml+"</span>"
@@ -757,12 +753,10 @@ function renderBoard(){
     const col=lfColor(r.lf);
     const isOpen=state.expanded===r.d;
     html += '<button class="rowbtn" data-d="'+r.d+'" aria-expanded="'+isOpen+'">'
-      +'<span class="rk">'+(i+1)+"</span>"
       +'<span class="dcode">'+r.code+"</span>"
-      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+'<span class="tag freq">'+freqTxt(r.fpd,oa[0],r.code,dmi)+"</span>"+timesLine(oa[0],r.code,dmi)+"</span>"
-      +'<span class="num hidem">'+r.fpd.toFixed(1)+"</span>"
-      +'<span class="num hidem">'+Math.round(r.spf)+"</span>"
-      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+col+'"></span><span class="ticks"></span></span><span class="lfnum" style="color:'+col+'">'+r.lf.toFixed(0)+"%</span></span>"
+      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+"</span>"
+      +schedHTML(r.fpd,oa[0],r.code,dmi)
+      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+col+'"></span></span><span class="lfnum" style="color:'+col+'">'+r.lf.toFixed(0)+"%</span></span>"
       +'<span class="opennum" style="color:'+col+'">'+Math.round(r.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>'
       +"</button>"
       +'<div class="season'+(isOpen?" open":"")+'">'+(isOpen? seasonHTML(r):"")+"</div>";
@@ -798,7 +792,7 @@ function seasonHTML(r){
   const avail = cells.filter(c=>!c.na);
   const maxOpen = Math.max(...avail.map(c=>c.open),1);
   let best=null; for(const c of avail){ if(!best||c.open>best.open) best=c; }
-  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month</h4><div class='strip'>";
+  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month · ≈"+Math.round(r.spf)+" seats/flt</h4><div class='strip'>";
   for(const c of cells){
     const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
     const yr = (c.p.m===1||c.p.i===0)? "’"+String(c.p.y).slice(2) : "";
