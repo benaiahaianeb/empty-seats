@@ -39,6 +39,7 @@ T100_FIELDS = ["UNIQUE_CARRIER", "ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
                "DEPARTURES_PERFORMED", "SEATS", "PASSENGERS", "YEAR", "MONTH", "CLASS"]
 SHARE_CSV = ROOT / "data" / "oo_dl_share.csv"
 DAYS_CSV = ROOT / "data" / "route_days.csv"
+INTL_CSV = ROOT / "data" / "intl_times.csv"
 TEMPLATE = ROOT / "template.html"
 OUTPUT = ROOT / "index.html"
 PLACEHOLDER = "/*__DATA__*/null"
@@ -202,6 +203,88 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
           + (f", {left} still missing" if left else ""))
 
 
+def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
+    """Snapshot normal departure times for Delta international routes.
+
+    DOT on-time data (source of domestic times) covers domestic flights only,
+    so international times come from AeroDataBox FIDS departure boards (API key
+    in the AERODATABOX_KEY env var; RapidAPI or API.market). Samples two
+    upcoming days at each US gateway with international Delta service and
+    writes banks to data/intl_times.csv. Skips gracefully without a key.
+    """
+    import os
+    key = os.environ.get("AERODATABOX_KEY", "").strip()
+    if not key:
+        print("  AERODATABOX_KEY not set; keeping existing intl_times.csv")
+        return
+    intl_dest = {c for c, (_, ctry) in ap_lookup.items() if ctry != "US"}
+    us = {c for c, (_, ctry) in ap_lookup.items() if ctry == "US"}
+    gi = g[g.ORIGIN.isin(us) & g.DEST.isin(intl_dest)]
+    if not len(gi):
+        print("  no international routes found")
+        return
+    origins = (gi.groupby("ORIGIN").seats.sum()
+               .sort_values(ascending=False).head(15).index.tolist())
+    hosts = [("aerodatabox.p.rapidapi.com",
+              {"X-RapidAPI-Key": key, "X-RapidAPI-Host": "aerodatabox.p.rapidapi.com"}),
+             ("prod.api.market/api/v1/aedbx/aerodatabox",
+              {"x-api-market-key": key})]
+    days = [dt.date.today() + dt.timedelta(days=1),
+            dt.date.today() + dt.timedelta(days=4)]
+    windows = [("00:00", "11:59"), ("12:00", "23:59")]
+    banks: dict[tuple[str, str], list[int]] = {}
+    hi, ok_calls = 0, 0
+    for o in origins:
+        for day in days:
+            for t1, t2 in windows:
+                data = None
+                while hi < len(hosts):
+                    host, hdrs = hosts[hi]
+                    url = (f"https://{host}/flights/airports/iata/{o}/"
+                           f"{day}T{t1}/{day}T{t2}"
+                           "?direction=Departure&withCodeshared=false"
+                           "&withCargo=false&withPrivate=false&withLeg=false")
+                    try:
+                        r = requests.get(url, headers=hdrs, timeout=60)
+                    except requests.RequestException as e:
+                        print(f"    {o} {day}: {e}")
+                        break
+                    if r.status_code in (401, 403) and ok_calls == 0:
+                        print(f"    host {host} rejected key; trying next")
+                        hi += 1
+                        continue
+                    if r.status_code != 200:
+                        print(f"    {o} {day} {t1}: HTTP {r.status_code}")
+                        break
+                    data = r.json()
+                    break
+                if data is None:
+                    continue
+                ok_calls += 1
+                for f in data.get("departures", []):
+                    num = (f.get("number") or "").replace(" ", "")
+                    if not re.match(r"^DL\d", num):
+                        continue
+                    mv = f.get("movement") or {}
+                    dest = (mv.get("airport") or {}).get("iata")
+                    tloc = (mv.get("scheduledTime") or {}).get("local", "")
+                    m = re.search(r"[ T](\d{2}):(\d{2})", tloc)
+                    if not dest or dest not in intl_dest or not m:
+                        continue
+                    banks.setdefault((o, dest), []).append(
+                        int(m.group(1)) * 60 + int(m.group(2)))
+    if not banks:
+        print(f"  no international times retrieved ({ok_calls} calls); "
+              "keeping existing intl_times.csv")
+        return
+    rows = [(o, d, " ".join(str(x) for x in _time_banks(mins)),
+             str(dt.date.today()))
+            for (o, d), mins in sorted(banks.items())]
+    pd.DataFrame(rows, columns=["o", "d", "times", "asof"]).to_csv(
+        INTL_CSV, index=False)
+    print(f"  wrote {INTL_CSV} ({len(rows)} intl routes, {ok_calls} API calls)")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh-skywest", action="store_true",
@@ -269,6 +352,12 @@ def main() -> int:
     print("Rebuilding operating-days table ...")
     rebuild_route_days(session, window_months)
 
+    print("Refreshing international departure times ...")
+    try:
+        rebuild_intl_times(g, ap_lookup)
+    except Exception as e:  # never let intl times break the build
+        print(f"  intl times failed: {e}")
+
     dm = [f"{y}-{mo:02d}" for y, mo in window_months]
     dmi = {s: i for i, s in enumerate(dm)}
     days: dict[str, list[int]] = {}
@@ -293,9 +382,20 @@ def main() -> int:
         times = {f"{o}-{d}": arr for (o, d), arr in tmp_t.items()}
     print(f"Embedded: {len(days)} day-limited routes, {len(times)} routes with times")
 
+    intl_times: dict[str, list[int]] = {}
+    if INTL_CSV.exists():
+        it = pd.read_csv(INTL_CSV)
+        rset = set(zip(g.ORIGIN, g.DEST))
+        for o, d, tv in zip(it.o, it.d, it.times):
+            tv = str(tv).strip()
+            if (o, d) in rset and tv and tv != "nan":
+                intl_times[f"{o}-{d}"] = [int(x) for x in tv.split()]
+    print(f"International times embedded: {len(intl_times)}")
+
     import json
     payload = json.dumps({"airports": airports, "rows": rows,
-                          "days": days, "dm": dm, "times": times},
+                          "days": days, "dm": dm, "times": times,
+                          "intlTimes": intl_times},
                          separators=(",", ":"))
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:

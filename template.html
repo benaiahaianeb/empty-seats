@@ -387,6 +387,7 @@ function freqLabel(fpd){
 // DATA.days: "ORG-DST" -> array of 7-bit masks (bit 0 = Monday) aligned to DATA.dm.
 const DAYS = DATA.days || {};
 const TIMES = DATA.times || {};
+const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
 const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
 function schedHTML(fpd, o, d, dmi){
@@ -402,6 +403,7 @@ function schedHTML(fpd, o, d, dmi){
   const parts = [];
   if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) parts.push(dl); }
   if(tl && tl.length) parts.push(tl.map(fmtT).join(" · "));
+  else if(ITIMES[key] && ITIMES[key].length) parts.push(ITIMES[key].map(fmtT).join(" · "));
   return '<span class="sched"><b>'+freqLabel(fpd)+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
 }
