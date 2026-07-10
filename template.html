@@ -122,7 +122,7 @@
   .season.open{display:block}
   .season h4{font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:14px}
   .season h4 b{color:var(--ink)}
-  .strip{display:grid;grid-template-columns:repeat(16,1fr);gap:5px;align-items:end}
+  .strip{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;align-items:end}
   .mcell{text-align:center}
   .mbar{position:relative;height:88px;background:#0b1226;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:6px}
   .mbar .bf{position:absolute;left:0;right:0;bottom:0;border-radius:3px 3px 0 0}
@@ -141,7 +141,7 @@
     .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
     .sched{grid-area:sched;padding:0}
     .gauge{grid-area:gauge;padding:0}
-    .strip{grid-template-columns:repeat(8,1fr);row-gap:12px}
+    .strip{grid-template-columns:repeat(6,1fr);row-gap:12px}
   }
 
   .empty{padding:36px 20px;text-align:center;color:var(--ink-dim);font-size:14px}
@@ -956,7 +956,7 @@ function seasonHTML(r){
     let i2=POINTS.findIndex(p=>p.mid>=t); if(i2<0)i2=POINTS.length-1;
     selIdx.add(i2); selIdx.add(Math.max(0,POINTS[i2].mid===t?i2:i2-1));
   }
-  const cells = POINTS.map(p=>{
+  const cells = POINTS.slice(-12).map(p=>{
     const a=series[p.i];
     if(!a||a.dep<1) return {p,na:true};
     const m=metricsAt(a,p);
@@ -969,7 +969,7 @@ function seasonHTML(r){
   let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month · ≈"+Math.round(r.spf)+" seats/flt</h4><div class='strip'>";
   for(const c of cells){
     const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
-    const yr = (c.p.m===1||c.p.i===0)? "’"+String(c.p.y).slice(2) : "";
+    const yr = (c.p.m===1||c===cells[0])? "’"+String(c.p.y).slice(2) : "";
     if(c.na){ h+='<div class="mcell"><div class="mbar na"></div><div class="mlab">'+lab+'<i>'+yr+'</i></div><div class="mval">—</div></div>'; continue; }
     const hp=Math.max(6,c.open/maxOpen*100), col=lfColor(c.lf);
     const cls = (best&&best.p.i===c.p.i?" best":"")+(selIdx.has(c.p.i)?" sel":"");
