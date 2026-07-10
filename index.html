@@ -116,6 +116,7 @@
   .opennum .mcap{display:none}
   .altcode{font-size:13.5px !important}
   .altrow{cursor:default}
+  .altrow .legs{grid-column:span 2;padding-right:10px}
   .altrow.orig{box-shadow:inset 3px 0 0 var(--board)}
 
   .season{border-bottom:1px solid #1d2a4a;background:#101a33;padding:16px 20px 20px;display:none}
@@ -140,6 +141,7 @@
     .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "sched sched sched" "gauge gauge gauge";row-gap:8px}
     .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
     .sched{grid-area:sched;padding:0}
+    .altrow .legs{grid-area:sched}
     .gauge{grid-area:gauge;padding:0}
     .strip{grid-template-columns:repeat(6,1fr);row-gap:12px}
   }
@@ -547,6 +549,12 @@ function computeAlts(){
   if(state.altDest==null) return null;
   const O=A[state.origin][0], D=A[state.altDest][0];
   const dmi=currentDaysIdx();
+  const MINF=0.4; // ~3x/week per connecting leg, as in the trip finder
+  const hubSer={};
+  for(const h of HUBS){
+    const hi=CODE_IDX.get(h);
+    if(hi!=null && byOrigin.has(hi)) hubSer[h]=destSeries(hi);
+  }
   const list=[];
   for(const no of nearbyCodes(O)){
     const oi=CODE_IDX.get(no.code);
@@ -556,14 +564,32 @@ function computeAlts(){
       if(nd.code===no.code) continue;
       const di=CODE_IDX.get(nd.code);
       if(di==null) continue;
-      const m=metricFromSeries(ser.get(di));
-      if(!m) continue;
-      if(isDeadRoute(m.fpd, no.code, nd.code, dmi)) continue;
-      list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi, m,
+      const options=[];
+      const direct=metricFromSeries(ser.get(di));
+      if(direct && !isDeadRoute(direct.fpd, no.code, nd.code, dmi))
+        options.push({legs:[{f:no.code,t:nd.code,m:direct}], bn:direct.open, direct:true});
+      for(const h in hubSer){
+        if(h===nd.code || h===no.code) continue;
+        const m1=metricFromSeries(ser.get(CODE_IDX.get(h)));
+        if(!m1 || m1.fpd<MINF || isDeadRoute(m1.fpd, no.code, h, dmi)) continue;
+        const m2=metricFromSeries(hubSer[h].get(di));
+        if(!m2 || m2.fpd<MINF || isDeadRoute(m2.fpd, h, nd.code, dmi)) continue;
+        options.push({legs:[{f:no.code,t:h,m:m1},{f:h,t:nd.code,m:m2}],
+                      bn:Math.min(m1.open,m2.open), direct:false});
+      }
+      if(!options.length) continue;
+      options.sort((a,b)=>b.bn-a.bn);
+      let best=options[0];
+      const dOpt=options.find(o=>o.direct);
+      if(dOpt && dOpt.bn >= best.bn-5) best=dOpt; // prefer nonstop when close
+      list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi,
+                 legs:best.legs, bn:best.bn,
+                 m:best.legs.length===1? best.legs[0].m : null,
+                 worstLf:Math.max(...best.legs.map(l=>l.m.lf)),
                  orig:no.code===O && nd.code===D});
     }
   }
-  list.sort((a,b)=>b.m.open-a.m.open);
+  list.sort((a,b)=>b.bn-a.bn);
   return list;
 }
 function renderAlts(){
@@ -579,16 +605,15 @@ function renderAlts(){
     return;
   }
   const D=A[state.altDest];
-  sum.innerHTML="<strong>"+list.length+" nonstop options</strong> near "+oa[0]+" → "+D[0]+" · "+whenTxt
-    +(isWeek?' <span class="estbadge">EST</span>':"")+" · airports within ~1 hr drive";
+  sum.innerHTML="<strong>"+list.length+" options</strong> near "+oa[0]+" → "+D[0]+" · "+whenTxt
+    +(isWeek?' <span class="estbadge">EST</span>':"")+" · airports within ~1 hr drive · incl. 1-stop connections";
   if(!list.length){
-    cont.innerHTML='<div class="empty">No nonstop service near this pair.</div>';
+    cont.innerHTML='<div class="empty">No service near this pair.</div>';
     return;
   }
   const dmi=currentDaysIdx();
   let html="";
   list.forEach(r=>{
-    const col=lfColor(r.m.lf);
     const co=A[CODE_IDX.get(r.o)], cd=A[CODE_IDX.get(r.d)];
     let tags="";
     if(r.orig) tags='<span class="tag" style="color:var(--board);border-color:var(--board)">YOUR ROUTE</span>';
@@ -598,11 +623,23 @@ function renderAlts(){
     }
     html+='<div class="rowbtn altrow'+(r.orig?" orig":"")+'">'
       +'<span class="dcode altcode">'+r.o+'→'+r.d+'</span>'
-      +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>"
-      +schedHTML(r.m.fpd, r.o, r.d, dmi)
-      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+col+'"></span></span><span class="lfnum" style="color:'+col+'">'+r.m.lf.toFixed(0)+"%</span></span>"
-      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.m.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>'
-      +"</div>";
+      +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
+    if(r.legs.length===1){
+      const col=lfColor(r.m.lf);
+      html+=schedHTML(r.m.fpd, r.o, r.d, dmi)
+        +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+col+'"></span></span><span class="lfnum" style="color:'+col+'">'+r.m.lf.toFixed(0)+"%</span></span>"
+        +'<span class="opennum" style="color:'+col+'">'+Math.round(r.m.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>';
+    } else {
+      const col=lfColor(r.worstLf);
+      const legHtml=r.legs.map((l,li)=>{
+        const c=lfColor(l.m.lf);
+        return (li? '<span class="legarrow">›</span>':'')
+          +'<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
+      }).join("");
+      html+='<span class="legs">'+legHtml+"</span>"
+        +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+'<small>MIN OPEN/LEG</small></span>';
+    }
+    html+="</div>";
   });
   cont.innerHTML=html;
 }
