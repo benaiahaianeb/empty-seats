@@ -421,18 +421,36 @@ function schedHTML(fpd, o, d, dmi){
       return '<span class="sched irr"><b>IRREGULAR</b></span>';
   }
   const parts = [];
-  if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) parts.push(dl); }
+  let label = null; // when a day pattern is shown, derive the weekly count from it
+  if(mk>0 && mk<127){
+    const dl=daysLabel(mk);
+    if(dl){
+      parts.push(dl);
+      if(fpd<1.5) label = dayCount(mk)+"×/WEEK";
+    }
+  }
   if(tl && tl.length) parts.push(tl.map(fmtT).join(" · "));
   else if(ITIMES[key] && ITIMES[key].length>1){
     // intl snapshot entry: [dayMask, hhmm, hhmm, ...]
     const ia=ITIMES[key], imk=ia[0];
-    if(imk>0 && imk<127){ const dl=daysLabel(imk); if(dl) parts.push(dl); }
+    if(imk>0 && imk<127){
+      const dl=daysLabel(imk);
+      if(dl){
+        parts.push(dl);
+        if(fpd<1.5) label = dayCount(imk)+"×/WEEK";
+      }
+    }
     parts.push(ia.slice(1).map(fmtT).join(" · "));
   }
-  return '<span class="sched"><b>'+freqLabel(fpd)+'</b>'
+  return '<span class="sched"><b>'+(label || freqLabel(fpd))+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
 }
 const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
+function dayCount(mask){
+  let n=0;
+  for(let i=0;i<7;i++) if(mask>>i&1) n++;
+  return n;
+}
 function daysLabel(mask){
   const on=[], off=[];
   for(let i=0;i<7;i++) (mask>>i&1? on:off).push(DOW[i]);
