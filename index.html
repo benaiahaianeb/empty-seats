@@ -178,7 +178,7 @@
       <div class="brand">Empty Seats <em>Atlas</em></div>
       <div class="sub">Where Delta's planes fly emptiest — DOT T‑100 loads for Delta mainline, Endeavor, and Delta-marketed SkyWest.</div>
     </div>
-    <div class="datastamp">BTS T-100 · DL + 9E + OO<span style="opacity:.7">(DL-mktd)</span><br>Scheduled service · <span id="stampRange"></span></div>
+    <div class="datastamp">BTS T-100 · Delta · Endeavor · SkyWest <span style="opacity:.7">(Delta-marketed)</span><br>Scheduled service · <span id="stampRange"></span></div>
   </header>
 
   <div class="controls">
@@ -197,7 +197,7 @@
         </span>
         <span class="modeswitch" id="spanSwitch">
           <button id="spanLatest" class="on">Latest</button>
-          <button id="spanAvg">3-yr avg</button>
+          <button id="spanAvg">3-year average</button>
         </span>
       </span>
       <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
@@ -220,7 +220,7 @@
       <div class="chip-group" id="freqGroup">
         <span class="chip-cap">Frequency</span>
         <button class="chip" data-minf="0">Any</button>
-        <button class="chip on" data-minf="0.12">1×/wk+</button>
+        <button class="chip on" data-minf="0.12">1×/week+</button>
         <button class="chip" data-minf="0.5">½ daily+</button>
         <button class="chip" data-minf="1">Daily+</button>
         <button class="chip" data-minf="3">3×/day+</button>
@@ -268,7 +268,7 @@
       <span class="th">City</span>
       <button class="th" data-sort="fpd">Schedule <span class="arr"></span></button>
       <button class="th" data-sort="lf" style="padding-left:14px">Cabin fill (load factor) <span class="arr"></span></button>
-      <button class="th right active" data-sort="open">Open/flt <span class="arr">▼</span></button>
+      <button class="th right active" data-sort="open">Open/flight <span class="arr">▼</span></button>
     </div>
     <div id="rows"></div>
   </div>
@@ -398,8 +398,8 @@ function freqLabel(fpd){
   if(fpd>=0.9) return "DAILY";
   const wk = fpd*7;
   if(wk>=6.5) return "DAILY";
-  if(wk>=0.9) return Math.round(wk)+"×/WK";
-  return "<1×/WK";
+  if(wk>=0.9) return Math.round(wk)+"×/WEEK";
+  return "<1×/WEEK";
 }
 // operating days for sub-daily routes, per window month (domestic routes only).
 // DATA.days: "ORG-DST" -> array of 7-bit masks (bit 0 = Monday) aligned to DATA.dm.
@@ -418,7 +418,7 @@ function schedHTML(fpd, o, d, dmi){
     // domestic route absent from scheduled-service records: charter/diversion ops
     const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
     if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US")
-      return '<span class="sched irr"><b>IRREG</b></span>';
+      return '<span class="sched irr"><b>IRREGULAR</b></span>';
   }
   const parts = [];
   if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) parts.push(dl); }
@@ -437,7 +437,7 @@ function daysLabel(mask){
   const on=[], off=[];
   for(let i=0;i<7;i++) (mask>>i&1? on:off).push(DOW[i]);
   if(!on.length || on.length===7) return null;
-  return on.length>=5? "EXC "+off.join("·") : on.join("·");
+  return on.length>=5? "EXCEPT "+off.join("·") : on.join("·");
 }
 function currentDaysIdx(){
   let p;
@@ -478,7 +478,7 @@ function freqTxt(fpd, o, d, dmi){
       // domestic route with no scheduled-service record that month:
       // charter/diversion-type flying with no fixed days
       const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
-      if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US") return "IRREG";
+      if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US") return "IRREGULAR";
     }
   }
   return freqLabel(fpd);
@@ -516,7 +516,7 @@ function avgMetric(arr, m){
 }
 function whenText(){
   if(state.mode==="week") return "week of "+fmtDate(WEEKS[state.week]);
-  return MONTH_FULL[state.month-1]+(state.span==="avg"? " · 3-yr avg" : " "+latestYearFor(state.month));
+  return MONTH_FULL[state.month-1]+(state.span==="avg"? " · 3-year average" : " "+latestYearFor(state.month));
 }
 function metricFromSeries(arr){
   if(!arr) return null;
@@ -627,7 +627,7 @@ function renderAlts(){
   }
   const D=A[state.altDest];
   sum.innerHTML="<strong>"+list.length+" options</strong> near "+oa[0]+" → "+D[0]+" · "+whenTxt
-    +(isWeek?' <span class="estbadge">EST</span>':"")+" · airports within ~1 hr drive · incl. 1-stop connections";
+    +(isWeek?' <span class="estbadge">ESTIMATE</span>':"")+" · airports within ~1 hr drive · with 1-stop connections";
   if(!list.length){
     cont.innerHTML='<div class="empty">No service near this pair.</div>';
     return;
@@ -649,7 +649,7 @@ function renderAlts(){
       const col=lfColor(r.m.lf);
       html+=schedHTML(r.m.fpd, r.o, r.d, dmi)
         +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+col+'"></span></span><span class="lfnum" style="color:'+col+'">'+r.m.lf.toFixed(0)+"%</span></span>"
-        +'<span class="opennum" style="color:'+col+'">'+Math.round(r.m.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>';
+        +'<span class="opennum" style="color:'+col+'">'+Math.round(r.m.open)+'<small class="mcap">OPEN SEATS/FLIGHT</small></span>';
     } else {
       const col=lfColor(r.worstLf);
       const legHtml=r.legs.map((l,li)=>{
@@ -718,7 +718,7 @@ function renderTrips(){
   const whenTxt = whenText();
   const sum = document.getElementById("summary");
   if(list.length){
-    sum.innerHTML = "<strong>Trip ideas</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"")+
+    sum.innerHTML = "<strong>Trip ideas</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">ESTIMATE</span>':"")+
       " · ranked by tightest leg";
   } else sum.textContent="";
   if(!list.length){
@@ -825,7 +825,7 @@ const slider = document.getElementById("weekSlider");
 slider.max = WEEKS.length-1;
 slider.value = state.week;
 function weekLabel(wi){
-  return 'Week of <b>'+fmtDate(WEEKS[wi])+'</b><span class="estbadge">EST</span>';
+  return 'Week of <b>'+fmtDate(WEEKS[wi])+'</b><span class="estbadge">ESTIMATE</span>';
 }
 function renderWeekOut(){
   document.getElementById("weekOut").innerHTML = weekLabel(state.week);
@@ -983,7 +983,7 @@ function renderBoard(){
   const sum = document.getElementById("summary");
   const whenTxt = whenText();
   if(list.length){
-    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"");
+    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">ESTIMATE</span>':"");
   } else sum.textContent="";
 
   if(!list.length){
@@ -1000,7 +1000,7 @@ function renderBoard(){
       +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+"</span>"
       +schedHTML(r.fpd,oa[0],r.code,dmi)
       +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+col+'"></span></span><span class="lfnum" style="color:'+col+'">'+r.lf.toFixed(0)+"%</span></span>"
-      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.open)+'<small class="mcap">OPEN SEATS/FLT</small></span>'
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.open)+'<small class="mcap">OPEN SEATS/FLIGHT</small></span>'
       +"</button>"
       +'<div class="season'+(isOpen?" open":"")+'">'+(isOpen? seasonHTML(r):"")+"</div>";
   });
@@ -1052,7 +1052,7 @@ function seasonHTML(r){
   const avail = cells.filter(c=>!c.na);
   const maxOpen = Math.max(...avail.map(c=>c.open),1);
   let best=null; for(const c of avail){ if(!best||c.open>best.open) best=c; }
-  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month"+(avgMode?" · 3-yr avg":"")+" · ≈"+Math.round(r.spf)+" seats/flt</h4><div class='strip'>";
+  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month"+(avgMode?" · 3-year average":"")+" · ≈"+Math.round(r.spf)+" seats/flight</h4><div class='strip'>";
   for(const c of cells){
     const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
     const yr = (!avgMode && (c.p.m===1||c===cells[0]))? "’"+String(c.p.y).slice(2) : "";
@@ -1065,7 +1065,7 @@ function seasonHTML(r){
       const mk = di==null? 0 : dayArr[di];
       if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) dtxt='<small class="mdays">'+dl+'</small>'; }
     }
-    h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+(avgMode?" · 3-yr avg":" "+c.p.y)+': '+c.lf.toFixed(1)+'% full">'
+    h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+(avgMode?" · 3-year average":" "+c.p.y)+': '+c.lf.toFixed(1)+'% full">'
       +'<div class="bf" style="height:'+hp.toFixed(0)+'%;background:'+col+'"></div></div>'
       +'<div class="mlab">'+lab+'<i>'+(yr||"&nbsp;")+'</i></div>'
       +'<div class="mval">'+Math.round(c.open)+"<small>"+c.lf.toFixed(0)+"%</small>"+dtxt+"</div>";
