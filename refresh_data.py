@@ -11,8 +11,8 @@ Usage:
     python refresh_data.py --refresh-skywest  # also rebuild the SkyWest->Delta
                                               # attribution table (heavier; run 1-2x/year)
 
-Data window: December of (latest_year - 2) through the latest reported month,
-mirroring a rolling ~16-month view. BTS reports with a ~3 month lag.
+Data window: rolling 36 months ending at the latest reported month.
+BTS reports with a ~3 month lag.
 
 Dependencies: pandas, requests
 """
@@ -347,7 +347,8 @@ def main() -> int:
     today = dt.date.today()
 
     print("Downloading T-100 years ...")
-    years, frames = [today.year - 2, today.year - 1, today.year], []
+    years, frames = [today.year - 3, today.year - 2,
+                     today.year - 1, today.year], []
     for y in years:
         df = download_t100_year(session, y)
         if df is not None:
@@ -361,9 +362,9 @@ def main() -> int:
     latest_month = int(df[df.YEAR == latest_year].MONTH.max())
     print(f"Latest reported month: {latest_year}-{latest_month:02d}")
 
-    # rolling window: Dec of (latest_year - 2) .. latest month
-    lo_y = latest_year - 2
-    df = df[((df.YEAR == lo_y) & (df.MONTH == 12)) | (df.YEAR > lo_y)]
+    # rolling window: 36 months ending at the latest reported month
+    lo_key = latest_year * 12 + latest_month - 35
+    df = df[(df.YEAR * 12 + df.MONTH) >= lo_key]
 
     if args.refresh_skywest:
         print("Rebuilding SkyWest attribution ...")
@@ -482,7 +483,8 @@ def main() -> int:
         print("ERROR: template.html missing data placeholder"); return 1
     OUTPUT.write_text(template.replace(PLACEHOLDER, payload))
     print(f"Wrote {OUTPUT} ({OUTPUT.stat().st_size/1e6:.2f} MB), "
-          f"{len(airports)} airports, window Dec {lo_y} - {latest_year}-{latest_month:02d}")
+          f"{len(airports)} airports, 36-month window ending "
+          f"{latest_year}-{latest_month:02d}")
     return 0
 
 

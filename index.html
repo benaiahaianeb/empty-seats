@@ -195,6 +195,10 @@
           <button id="modeMonth" class="on">Month</button>
           <button id="modeWeek">Week</button>
         </span>
+        <span class="modeswitch" id="spanSwitch">
+          <button id="spanLatest" class="on">Latest</button>
+          <button id="spanAvg">3-yr avg</button>
+        </span>
       </span>
       <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
       <div class="weekpick" id="weekPick">
@@ -215,8 +219,8 @@
       </div>
       <div class="chip-group" id="freqGroup">
         <span class="chip-cap">Frequency</span>
-        <button class="chip on" data-minf="0">Any</button>
-        <button class="chip" data-minf="0.12">1×/wk+</button>
+        <button class="chip" data-minf="0">Any</button>
+        <button class="chip on" data-minf="0.12">1×/wk+</button>
         <button class="chip" data-minf="0.5">½ daily+</button>
         <button class="chip" data-minf="1">Daily+</button>
         <button class="chip" data-minf="3">3×/day+</button>
@@ -365,12 +369,12 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 // ---- state ----
 let state = {
   origin:null, mode:"month", month:null, week:0,
-  geo:"all", minFpd:0, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null
+  geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest"
 };
 {
-  const bdl = A.findIndex(a=>a[0]==="BDL");
-  state.origin = (bdl>=0 && byOrigin.has(bdl)) ? bdl : originList[0];
+  const defo = A.findIndex(a=>a[0]==="BOS");
+  state.origin = (defo>=0 && byOrigin.has(defo)) ? defo : originList[0];
   const m = new Date().getMonth()+1;
   state.month = yearsByMonth[m].size? m : POINTS[POINTS.length-1].m;
   // default week: nearest to today, clamped
@@ -498,9 +502,26 @@ function destSeries(originIdx){
 function metricsAt(a, p){ // a={dep,seats,pax}, p=point
   return {fpd:a.dep/p.days, spf:a.seats/a.dep, lf:a.pax/a.seats*100, open:(a.seats-a.pax)/a.dep};
 }
+// flight-weighted average across all occurrences of calendar month m in the window
+function avgMetric(arr, m){
+  let dep=0, seats=0, pax=0, days=0;
+  for(const p of POINTS){
+    if(p.m!==m) continue;
+    const a=arr[p.i];
+    if(!a || a.dep<1 || a.seats<1) continue;
+    dep+=a.dep; seats+=a.seats; pax+=a.pax; days+=p.days;
+  }
+  if(dep<1 || seats<1) return null;
+  return {fpd:dep/days, spf:seats/dep, lf:pax/seats*100, open:(seats-pax)/dep};
+}
+function whenText(){
+  if(state.mode==="week") return "week of "+fmtDate(WEEKS[state.week]);
+  return MONTH_FULL[state.month-1]+(state.span==="avg"? " · 3-yr avg" : " "+latestYearFor(state.month));
+}
 function metricFromSeries(arr){
   if(!arr) return null;
   if(state.mode==="month"){
+    if(state.span==="avg") return avgMetric(arr, state.month);
     const p = PIDX.get(pointKey(latestYearFor(state.month),state.month));
     if(!p) return null;
     const a = arr[p.i];
@@ -597,7 +618,7 @@ function renderAlts(){
   const sum=document.getElementById("summary");
   const oa=A[state.origin];
   const isWeek=state.mode==="week";
-  const whenTxt=isWeek? "week of "+fmtDate(WEEKS[state.week]) : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
+  const whenTxt = whenText();
   const list=computeAlts();
   if(list==null){
     sum.innerHTML="<strong>Alternatives</strong> from "+oa[0]+" · pick a destination";
@@ -694,7 +715,7 @@ function renderTrips(){
   const cont = document.getElementById("rows");
   const oa = A[state.origin];
   const isWeek = state.mode==="week";
-  const whenTxt = isWeek? "week of "+fmtDate(WEEKS[state.week]) : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
+  const whenTxt = whenText();
   const sum = document.getElementById("summary");
   if(list.length){
     sum.innerHTML = "<strong>Trip ideas</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"")+
@@ -742,8 +763,10 @@ function computeMonth(originIdx, month){
   const dmi = currentDaysIdx(), oCode = A[originIdx][0];
   const out=[];
   for(const [d,arr] of series){
-    const a = arr[p.i]; if(!a || a.dep<1 || a.seats<1) continue;
-    const m = metricsAt(a,p);
+    let m;
+    if(state.span==="avg"){ m = avgMetric(arr, month); }
+    else { const a = arr[p.i]; if(!a || a.dep<1 || a.seats<1) continue; m = metricsAt(a,p); }
+    if(!m) continue;
     if(!passesGeoFreq(d,m)) continue;
     if(isDeadRoute(m.fpd, oCode, A[d][0], dmi)) continue;
     out.push(buildRow(d,m,{year}));
@@ -791,7 +814,7 @@ function renderMonths(){
     const b = document.createElement("button");
     b.className = "mo"+(state.month===m?" on":"");
     b.disabled=!has; if(!has) b.style.opacity=.3;
-    b.innerHTML = MONTH_ABBR[m-1]+'<span class="yr">'+(has?"’"+String(latestYearFor(m)).slice(2):"—")+"</span>";
+    b.innerHTML = MONTH_ABBR[m-1]+'<span class="yr">'+(has? (state.span==="avg"?"avg":"’"+String(latestYearFor(m)).slice(2)) :"—")+"</span>";
     b.onclick = ()=>{ state.month=m; state.expanded=null; renderMonths(); renderBoard(); };
     el.appendChild(b);
   }
@@ -818,10 +841,20 @@ function setMode(m){
   document.getElementById("modeWeek").classList.toggle("on",m==="week");
   document.getElementById("monthPick").classList.toggle("off",m!=="month");
   document.getElementById("weekPick").classList.toggle("on",m==="week");
+  document.getElementById("spanSwitch").style.display = m==="month"? "":"none";
   renderBoard();
 }
 document.getElementById("modeMonth").onclick=()=>setMode("month");
 document.getElementById("modeWeek").onclick=()=>setMode("week");
+function setSpan(sp){
+  state.span=sp; state.expanded=null;
+  document.getElementById("spanLatest").classList.toggle("on",sp==="latest");
+  document.getElementById("spanAvg").classList.toggle("on",sp==="avg");
+  renderMonths();
+  renderBoard();
+}
+document.getElementById("spanLatest").onclick=()=>setSpan("latest");
+document.getElementById("spanAvg").onclick=()=>setSpan("avg");
 
 // ---- origin picker ----
 const oi = document.getElementById("originInput");
@@ -948,8 +981,7 @@ function renderBoard(){
   const cont = document.getElementById("rows");
   const oa = A[state.origin];
   const sum = document.getElementById("summary");
-  const whenTxt = isWeek? "week of "+fmtDate(WEEKS[state.week])
-    : MONTH_FULL[state.month-1]+" "+latestYearFor(state.month);
+  const whenTxt = whenText();
   if(list.length){
     sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">EST</span>':"");
   } else sum.textContent="";
@@ -993,30 +1025,47 @@ function seasonHTML(r){
     let i2=POINTS.findIndex(p=>p.mid>=t); if(i2<0)i2=POINTS.length-1;
     selIdx.add(i2); selIdx.add(Math.max(0,POINTS[i2].mid===t?i2:i2-1));
   }
-  const cells = POINTS.slice(-12).map(p=>{
-    const a=series[p.i];
-    if(!a||a.dep<1) return {p,na:true};
-    const m=metricsAt(a,p);
-    return {p,lf:m.lf,open:m.open,fpd:m.fpd};
-  });
+  const avgMode = (state.mode==="month" && state.span==="avg");
+  let cells;
+  if(avgMode){
+    cells = [];
+    for(let mm=1; mm<=12; mm++){
+      let dep=0, seats=0, pax=0, days=0;
+      for(const p of POINTS){
+        if(p.m!==mm) continue;
+        const a=series[p.i];
+        if(!a || a.dep<1 || a.seats<1) continue;
+        dep+=a.dep; seats+=a.seats; pax+=a.pax; days+=p.days;
+      }
+      if(dep<1 || seats<1){ cells.push({p:{m:mm,y:0,i:-1}, na:true}); continue; }
+      cells.push({p:{m:mm,y:0,i:-1}, lf:pax/seats*100, open:(seats-pax)/dep, fpd:dep/days});
+    }
+  } else {
+    cells = POINTS.slice(-12).map(p=>{
+      const a=series[p.i];
+      if(!a||a.dep<1) return {p,na:true};
+      const m=metricsAt(a,p);
+      return {p,lf:m.lf,open:m.open,fpd:m.fpd};
+    });
+  }
   const dayArr = DAYS[oa[0]+"-"+r.code];
   const avail = cells.filter(c=>!c.na);
   const maxOpen = Math.max(...avail.map(c=>c.open),1);
   let best=null; for(const c of avail){ if(!best||c.open>best.open) best=c; }
-  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month · ≈"+Math.round(r.spf)+" seats/flt</h4><div class='strip'>";
+  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month"+(avgMode?" · 3-yr avg":"")+" · ≈"+Math.round(r.spf)+" seats/flt</h4><div class='strip'>";
   for(const c of cells){
     const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
-    const yr = (c.p.m===1||c===cells[0])? "’"+String(c.p.y).slice(2) : "";
+    const yr = (!avgMode && (c.p.m===1||c===cells[0]))? "’"+String(c.p.y).slice(2) : "";
     if(c.na){ h+='<div class="mcell"><div class="mbar na"></div><div class="mlab">'+lab+'<i>'+yr+'</i></div><div class="mval">—</div></div>'; continue; }
     const hp=Math.max(6,c.open/maxOpen*100), col=lfColor(c.lf);
-    const cls = (best&&best.p.i===c.p.i?" best":"")+(selIdx.has(c.p.i)?" sel":"");
+    const cls = (best===c?" best":"")+((avgMode? c.p.m===state.month : selIdx.has(c.p.i))?" sel":"");
     let dtxt="";
-    if(c.fpd<0.9 && dayArr){
+    if(c.fpd<0.9 && dayArr && c.p.y){
       const di = DM_IDX.get(c.p.y+"-"+String(c.p.m).padStart(2,"0"));
       const mk = di==null? 0 : dayArr[di];
       if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) dtxt='<small class="mdays">'+dl+'</small>'; }
     }
-    h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+" "+c.p.y+': '+c.lf.toFixed(1)+'% full">'
+    h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+(avgMode?" · 3-yr avg":" "+c.p.y)+': '+c.lf.toFixed(1)+'% full">'
       +'<div class="bf" style="height:'+hp.toFixed(0)+'%;background:'+col+'"></div></div>'
       +'<div class="mlab">'+lab+'<i>'+(yr||"&nbsp;")+'</i></div>'
       +'<div class="mval">'+Math.round(c.open)+"<small>"+c.lf.toFixed(0)+"%</small>"+dtxt+"</div>";
