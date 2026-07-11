@@ -420,28 +420,27 @@ function schedHTML(fpd, o, d, dmi){
     if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US")
       return '<span class="sched irr"><b>IRREGULAR</b></span>';
   }
-  const parts = [];
-  let label = null; // when a day pattern is shown, derive the weekly count from it
-  if(mk>0 && mk<127){
-    const dl=daysLabel(mk);
-    if(dl){
-      if(fpd<1.5 && dl.startsWith("EXCEPT ")) label = "DAILY "+dl;
-      else { parts.push(dl); if(fpd<1.5) label = dayCount(mk)+"×/WEEK"; }
-    }
-  }
-  if(tl && tl.length) parts.push(tl.map(fmtT).join(" · "));
+  // schedule data shown must never contradict the label: day patterns drive
+  // weekly counts, visible time banks drive per-day counts
+  let mask = 0, banks = null;
+  if(tl && tl.length){ mask = mk; banks = tl; }
   else if(ITIMES[key] && ITIMES[key].length>1){
-    // intl snapshot entry: [dayMask, hhmm, hhmm, ...]
-    const ia=ITIMES[key], imk=ia[0];
-    if(imk>0 && imk<127){
-      const dl=daysLabel(imk);
-      if(dl){
-        if(fpd<1.5 && dl.startsWith("EXCEPT ")) label = "DAILY "+dl;
-        else { parts.push(dl); if(fpd<1.5) label = dayCount(imk)+"×/WEEK"; }
-      }
-    }
-    parts.push(ia.slice(1).map(fmtT).join(" · "));
+    mask = ITIMES[key][0];
+    banks = ITIMES[key].slice(1);
+  } else { mask = mk; }
+  const dl = (mask>0 && mask<127)? daysLabel(mask) : null;
+  const parts = [];
+  let label = null;
+  if(banks && banks.length>=2){
+    label = banks.length+"×/DAY";
+    if(dl) parts.push(dl);
+  } else if(dl){
+    if(dl.startsWith("EXCEPT ")) label = "DAILY "+dl;
+    else { label = dayCount(mask)+"×/WEEK"; parts.push(dl); }
+  } else if(banks && banks.length===1 && fpd>=0.9){
+    label = "DAILY";
   }
+  if(banks && banks.length) parts.push(banks.map(fmtT).join(" · "));
   return '<span class="sched"><b>'+(label || freqLabel(fpd))+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
 }

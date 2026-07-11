@@ -143,9 +143,9 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
     """Incrementally build data/route_days.csv: per-route, per-month day-of-week
     operating masks and normal scheduled departure banks for DL-marketed flights,
     from Marketing-Carrier on-time data (domestic routes only). mask bit 0 =
-    Monday; a weekday counts if the route saw at least one flight (operated or
-    cancelled) on that weekday that month. times is a space-separated list of
-    HHMM departure banks (local time).
+    Monday; a weekday counts only if the route flew on at least half of that
+    weekday's dates in the month, so one-off extra sections don't hide a clean
+    pattern. times is a space-separated list of HHMM departure banks (local).
 
     Months already present in the CSV are kept, months outside the window are
     dropped, and only missing months are downloaded (typically one per run).
@@ -184,9 +184,16 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
         df = df[(df.Marketing_Airline_Network == "DL")
                 & (df["Operating_Airline "].isin(["DL", "9E", "OO"]))]
         t = pd.to_numeric(df.CRSDepTime, errors="coerce")
-        df = df.assign(dow=pd.to_datetime(df.FlightDate).dt.dayofweek,
+        dts = pd.to_datetime(df.FlightDate)
+        df = df.assign(dow=dts.dt.dayofweek, day=dts.dt.day,
                        mins=(t // 100) % 24 * 60 + t % 100)
-        masks = df.groupby(["Origin", "Dest"]).dow.apply(
+        import calendar
+        occ = [0] * 7
+        for dnum in range(1, calendar.monthrange(y, m)[1] + 1):
+            occ[calendar.weekday(y, m, dnum)] += 1
+        srv = df.groupby(["Origin", "Dest", "dow"]).day.nunique().reset_index()
+        srv = srv[[c >= 0.5 * occ[w] for c, w in zip(srv.day, srv.dow)]]
+        masks = srv.groupby(["Origin", "Dest"]).dow.apply(
             lambda s: sum(1 << int(w) for w in set(s))).rename("mask")
         tdf = df[df.mins.notna()].copy()
         tdf["mins"] = tdf.mins.astype(int)
@@ -194,6 +201,7 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
             lambda s: " ".join(str(x) for x in _time_banks(list(s)))).rename("times")
         add = pd.concat([masks, times], axis=1).reset_index()
         add.columns = ["o", "d", "mask", "times"]
+        add["mask"] = add["mask"].fillna(0).astype(int)
         add["times"] = add.times.fillna("")
         add["ym"] = f"{y}-{m:02d}"
         frames.append(add[cols])
