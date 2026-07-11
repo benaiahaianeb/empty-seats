@@ -425,8 +425,8 @@ function schedHTML(fpd, o, d, dmi){
   if(mk>0 && mk<127){
     const dl=daysLabel(mk);
     if(dl){
-      parts.push(dl);
-      if(fpd<1.5) label = dayCount(mk)+"×/WEEK";
+      if(fpd<1.5 && dl.startsWith("EXCEPT ")) label = "DAILY "+dl;
+      else { parts.push(dl); if(fpd<1.5) label = dayCount(mk)+"×/WEEK"; }
     }
   }
   if(tl && tl.length) parts.push(tl.map(fmtT).join(" · "));
@@ -436,8 +436,8 @@ function schedHTML(fpd, o, d, dmi){
     if(imk>0 && imk<127){
       const dl=daysLabel(imk);
       if(dl){
-        parts.push(dl);
-        if(fpd<1.5) label = dayCount(imk)+"×/WEEK";
+        if(fpd<1.5 && dl.startsWith("EXCEPT ")) label = "DAILY "+dl;
+        else { parts.push(dl); if(fpd<1.5) label = dayCount(imk)+"×/WEEK"; }
       }
     }
     parts.push(ia.slice(1).map(fmtT).join(" · "));
