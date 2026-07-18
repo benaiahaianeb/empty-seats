@@ -12,9 +12,22 @@
     --error:#F44336;   --error-text:#C62828;
     --bg:#FAFAFA; --surface:#FFFFFF; --text:#212121; --text-secondary:#616161;
     --divider:#E0E0E0; --radius:4px;
+    --hover:#F5F5F5; --track:#EEEEEE;
+    --on-primary:#FFFFFF; --chip-on-text:#0D47A1;
+    --warn-chip-bg:#FFF8E1; --warn-chip-text:#7B5800;
     --shadow-2:0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
     --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    /* data font: system stack with tabular numerals, not monospace */
+    --mono:var(--font);
+  }
+  html[data-theme="dark"]{
+    --primary:#69B1FF; --primary-dark:#8CC4FF; --primary-pastel:#16324F;
+    --success-text:#81C784; --warning-text:#FFB74D; --error-text:#E57373;
+    --error:#EF5350;
+    --bg:#121212; --surface:#1E1E1E; --text:#E6E6E6; --text-secondary:#A0A0A0;
+    --divider:#333333; --hover:#2A2A2A; --track:#333333;
+    --on-primary:#0A2540; --chip-on-text:#A6CFFF;
+    --warn-chip-bg:#2E2410; --warn-chip-text:#FFD54F;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{background:var(--bg)}
@@ -26,6 +39,7 @@
   .brand em{font-style:normal;color:var(--primary)}
   .sub{color:var(--text-secondary);font-size:14px;max-width:560px;line-height:1.45}
   .datastamp{font-size:12px;color:var(--text-secondary);text-align:right;line-height:1.5}
+  .themebtn{font:inherit;font-size:12px;font-weight:500;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0}
 
   .controls{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:16px;
     display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px}
@@ -33,28 +47,28 @@
   .ctl-label{font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:flex;align-items:center;gap:10px}
   .origin-box{position:relative}
   .origin-input{width:100%;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);
-    font-family:var(--mono);font-size:14px;padding:8px 8px;outline:none}
+    font-size:14px;padding:8px 8px;outline:none}
   .origin-input:focus{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
   .origin-menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--divider);
     border-radius:var(--radius);max-height:260px;overflow:auto;display:none;box-shadow:var(--shadow-2)}
   .origin-menu.open{display:block}
   .origin-opt{padding:8px 12px;cursor:pointer;font-size:14px;display:flex;gap:10px;align-items:baseline}
-  .origin-opt:hover{background:#F5F5F5}
-  .origin-opt .code{font-family:var(--mono);color:var(--primary);font-weight:500;width:44px}
+  .origin-opt:hover{background:var(--hover)}
+  .origin-opt .code{color:var(--primary);font-weight:500;width:44px}
   .origin-opt .city{color:var(--text-secondary)}
 
   .modeswitch{display:inline-flex;border:1px solid var(--divider);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
   .modeswitch button{font:inherit;font-size:13px;font-weight:500;background:transparent;border:none;color:var(--text-secondary);
     padding:5px 12px;cursor:pointer;transition:background-color 150ms ease}
   .modeswitch button+button{border-left:1px solid var(--divider)}
-  .modeswitch button.on{background:var(--primary);color:#fff}
+  .modeswitch button.on{background:var(--primary);color:var(--on-primary)}
 
   .months{display:flex;gap:4px;flex-wrap:wrap}
   .mo{font:inherit;font-size:13px;font-weight:500;padding:6px 0;width:52px;text-align:center;
     background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text-secondary);cursor:pointer;
     transition:background-color 150ms ease}
-  .mo:hover{background:#F5F5F5;color:var(--text)}
-  .mo.on{background:var(--primary);border-color:var(--primary);color:#fff}
+  .mo:hover{background:var(--hover);color:var(--text)}
+  .mo.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
   .mo .yr{display:block;font-size:10px;opacity:.8}
   .mo:focus-visible,.origin-input:focus-visible,.chip:focus-visible,button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
 
@@ -62,19 +76,19 @@
   .weekpick.on{display:block}
   .monthpick.off{display:none}
   .weekrow{display:flex;align-items:center;gap:10px}
-  .wbtn{font-family:var(--mono);font-size:14px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);
+  .wbtn{font:inherit;font-size:14px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);
     width:32px;height:32px;cursor:pointer}
-  .wbtn:hover{background:#F5F5F5}
+  .wbtn:hover{background:var(--hover)}
   input[type=range]{flex:1;accent-color:var(--primary);height:32px}
   .weekout{margin-top:6px;font-size:13px;color:var(--text-secondary)}
   .weekout b{color:var(--text);font-weight:500}
-  .estbadge{font-size:11px;font-weight:500;color:#7B5800;background:var(--warning-pastel);border-radius:var(--radius);padding:1px 6px;margin-left:6px}
+  .estbadge{font-size:11px;font-weight:500;color:var(--warn-chip-text);background:var(--warn-chip-bg);border-radius:var(--radius);padding:1px 6px;margin-left:6px}
 
   .filters{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--divider);padding-top:12px}
   .chip{font:inherit;font-size:13px;font-weight:500;padding:5px 10px;border-radius:var(--radius);border:1px solid var(--divider);
     background:var(--surface);color:var(--text-secondary);cursor:pointer;transition:background-color 150ms ease}
-  .chip:hover{background:#F5F5F5}
-  .chip.on{background:var(--primary-pastel);border-color:var(--primary);color:#0D47A1}
+  .chip:hover{background:var(--hover)}
+  .chip.on{background:var(--primary-pastel);border-color:var(--primary);color:var(--chip-on-text)}
   .chip-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .chip-cap{font-size:12px;color:var(--text-secondary);margin-right:2px}
   .spacer{flex:1}
@@ -104,13 +118,13 @@
   .rowbtn{width:100%;display:grid;grid-template-columns:92px 1fr 200px 210px 110px;align-items:center;
     padding:10px 16px;border:none;border-bottom:1px solid var(--divider);background:var(--surface);color:var(--text);cursor:pointer;text-align:left;
     font:inherit;transition:background-color 150ms ease}
-  .rowbtn:hover{background:#F5F5F5}
-  .dcode{font-family:var(--mono);font-weight:500;font-size:16px;color:var(--primary)}
+  .rowbtn:hover{background:var(--hover)}
+  .dcode{font-family:var(--font);font-variant-numeric:tabular-nums;font-weight:500;font-size:16px;color:var(--primary)}
   .dcity{font-size:14px;color:var(--text);padding-right:10px;line-height:1.3}
   .tag{font-size:11px;color:var(--text-secondary);border:1px solid var(--divider);
     border-radius:var(--radius);padding:1px 5px;margin-left:6px;vertical-align:1px;white-space:nowrap;background:var(--surface)}
-  .sched{font-family:var(--mono);font-size:13px;color:var(--text);padding-right:14px;line-height:1.4}
-  .sched b{font-weight:600}
+  .sched{font-family:var(--font);font-variant-numeric:tabular-nums;font-size:13px;color:var(--text);padding-right:14px;line-height:1.4}
+  .sched b{font-weight:500}
   .sched.irr b{font-weight:400;color:var(--text-secondary)}
   .sched small{display:block;font-size:12px;color:var(--text-secondary);margin-top:1px}
   .sched .noflying{color:var(--text-secondary)}
@@ -120,18 +134,18 @@
   .altrow .legs{grid-column:span 2;padding-right:10px}
 
   .gauge{display:flex;align-items:center;gap:10px;padding:0 14px}
-  .cabin{flex:1;height:10px;border-radius:2px;background:#EEEEEE;border:1px solid var(--divider);position:relative;overflow:hidden}
+  .cabin{flex:1;height:10px;border-radius:2px;background:var(--track);border:1px solid var(--divider);position:relative;overflow:hidden}
   .fill{position:absolute;inset:0;right:auto;border-radius:1px}
-  .lfnum{font-family:var(--mono);font-size:13px;width:52px;text-align:right}
+  .lfnum{font-variant-numeric:tabular-nums;font-size:13px;width:52px;text-align:right}
 
-  .opennum{font-family:var(--mono);font-weight:600;font-size:16px;text-align:right}
+  .opennum{font-variant-numeric:tabular-nums;font-weight:600;font-size:16px;text-align:right}
   .opennum small{display:block;font-family:var(--font);font-weight:400;font-size:11px;color:var(--text-secondary)}
   .opennum .mcap{display:none}
 
   .season{border-bottom:1px solid var(--divider);background:var(--bg);padding:16px 20px 20px;display:none}
   .season.open{display:block}
   .season h4{font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:12px}
-  .season h4 b{color:var(--text);font-family:var(--mono);font-weight:600}
+  .season h4 b{color:var(--text);font-weight:500}
   .strip{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;align-items:end}
   .mcell{text-align:center}
   .mbar{position:relative;height:80px;background:var(--surface);border:1px solid var(--divider);border-radius:2px;overflow:hidden;margin-bottom:6px}
@@ -141,7 +155,7 @@
   .mbar.na{opacity:.35}
   .mlab{font-size:12px;color:var(--text-secondary)}
   .mlab i{font-style:normal;font-size:10px;color:var(--text-secondary);display:block}
-  .mval{font-family:var(--mono);font-size:12px;color:var(--text)}
+  .mval{font-variant-numeric:tabular-nums;font-size:12px;color:var(--text)}
   .mval small{display:block;font-size:10px;color:var(--text-secondary)}
   .mval .mdays{font-size:10px;color:var(--text-secondary);margin-top:1px}
   @media(max-width:860px){
@@ -161,7 +175,7 @@
   .triprow{width:100%;display:grid;grid-template-columns:240px 1fr 130px;align-items:center;
     padding:12px 16px;border-bottom:1px solid var(--divider);background:var(--surface);color:var(--text);text-align:left}
   .legs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-right:10px}
-  .leg{font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:3px 7px;white-space:nowrap}
+  .leg{font-variant-numeric:tabular-nums;font-size:12px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:3px 7px;white-space:nowrap}
   .leg b{font-weight:600}
   .leg small{color:var(--text-secondary);font-size:11px}
   .legarrow{color:var(--text-secondary);font-size:12px}
@@ -178,7 +192,7 @@
       <div class="brand">Empty Seats <em>Atlas</em></div>
       <div class="sub">Where Delta's planes fly emptiest — DOT T‑100 loads for Delta mainline, Endeavor, and Delta-marketed SkyWest.</div>
     </div>
-    <div class="datastamp">BTS T-100 · Delta · Endeavor · SkyWest <span style="opacity:.7">(Delta-marketed)</span><br>Scheduled service · <span id="stampRange"></span></div>
+    <div class="datastamp">BTS T-100 · Delta · Endeavor · SkyWest <span style="opacity:.7">(Delta-marketed)</span><br>Scheduled service · <span id="stampRange"></span><br><button id="themeBtn" class="themebtn">Dark mode</button></div>
   </header>
 
   <div class="controls">
@@ -277,6 +291,16 @@
 
 <script>
 const DATA = /*__DATA__*/null;
+
+// theme: saved choice wins; otherwise dark on mobile, light on desktop
+(function(){
+  let saved = null;
+  try { saved = localStorage.getItem("esa-theme"); } catch(e){}
+  let mobile = false;
+  try { mobile = window.matchMedia("(max-width: 760px)").matches; } catch(e){}
+  const theme = (saved==="dark"||saved==="light")? saved : (mobile? "dark" : "light");
+  document.documentElement.dataset.theme = theme;
+})();
 
 const MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -1095,6 +1119,19 @@ function seasonHTML(r){
   h+="</div>";
   return h;
 }
+
+// ---- theme toggle ----
+(function(){
+  const btn = document.getElementById("themeBtn");
+  function sync(){ btn.textContent = document.documentElement.dataset.theme==="dark"? "Light mode" : "Dark mode"; }
+  btn.addEventListener("click", ()=>{
+    const next = document.documentElement.dataset.theme==="dark"? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("esa-theme", next); } catch(e){}
+    sync();
+  });
+  sync();
+})();
 
 // ---- init ----
 (function(){
