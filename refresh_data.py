@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Empty Seats Atlas — data refresh script.
+Empty Seats Atlas data refresh.
 
 Downloads the latest BTS T-100 Segment data (Delta mainline DL + Endeavor 9E +
 Delta-marketed SkyWest OO), rebuilds the embedded dataset, and regenerates
@@ -245,8 +245,8 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
              ("prod.api.market/api/v1/aedbx/aerodatabox",
               {"x-api-market-key": key})]
     block = [dt.date.today() + dt.timedelta(days=k) for k in range(1, 8)]
-    # far-future probes catch opposite-season routes (existence + rough times);
-    # higher tiers may reject them, which is fine
+    # far-future probes catch opposite-season routes; some API tiers
+    # reject far dates, and the loop skips those responses
     probes = [dt.date.today() + dt.timedelta(days=k) for k in (120, 180)]
     days = block + probes
     blockset = set(block)

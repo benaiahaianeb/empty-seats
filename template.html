@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Empty Seats Atlas — Delta T-100 Load Explorer</title>
+<title>Empty Seats Atlas</title>
 <style>
   :root{
     --primary:#0066CC; --primary-dark:#0052A3; --primary-pastel:#EAF2FB;
@@ -190,7 +190,7 @@
   <header>
     <div>
       <div class="brand">Empty Seats <em>Atlas</em></div>
-      <div class="sub">Where Delta's planes fly emptiest — DOT T‑100 loads for Delta mainline, Endeavor, and Delta-marketed SkyWest.</div>
+      <div class="sub">Where Delta flies emptiest. DOT T-100 loads for mainline, Endeavor, and Delta-marketed SkyWest.</div>
     </div>
     <div class="datastamp">BTS T-100 · Delta · Endeavor · SkyWest <span style="opacity:.7">(Delta-marketed)</span><br>Scheduled service · <span id="stampRange"></span><br><button id="themeBtn" class="themebtn">Dark mode</button></div>
   </header>
@@ -241,7 +241,7 @@
       </div>
       <div class="chip-group" id="carGroup">
         <span class="chip-cap">Operators</span>
-        <button class="chip on" data-car="1" title="Endeavor Air — wholly-owned Delta Connection">Endeavor 9E</button>
+        <button class="chip on" data-car="1" title="Endeavor Air, a wholly owned Delta subsidiary">Endeavor 9E</button>
         <button class="chip on" data-car="2" title="SkyWest segments apportioned by share marketed as Delta in DOT on-time data">SkyWest (est.)</button>
       </div>
       <div class="chip-group" id="vibeGroup" style="display:none">
@@ -347,7 +347,7 @@ const originList = [...byOrigin.keys()].sort((a,b)=>(originSeats.get(b)||0)-(ori
 // ---- trip finder config ----
 const HUBS = ["ATL","MSP","DTW","SLC","JFK","LGA","BOS","LAX","SEA"];
 const VIBES = {
-  // sun & beach — g = hidden gem
+  // sun & beach; g = hidden gem
   CUN:["sun"],MBJ:["sun"],PUJ:["sun"],PLS:["sun"],NAS:["sun"],AUA:["sun"],SXM:["sun"],STT:["sun"],
   STX:["sun","g"],SJU:["sun"],GCM:["sun"],BON:["sun","g"],SVD:["sun","g"],CUR:["sun","g"],
   BZE:["sun","g"],LIR:["sun","g"],SJO:["sun","latam"],SJD:["sun"],PVR:["sun"],CZM:["sun","g"],

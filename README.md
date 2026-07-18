@@ -1,13 +1,8 @@
 # Empty Seats Atlas
 
-An explorer for finding where Delta's planes fly emptiest — built for
-non-rev / standby trip planning from DOT Form 41 T-100 data.
+Finds the Delta routes with the most empty seats, for non-rev standby planning.
 
-**Coverage:** Delta mainline (DL), Endeavor Air (9E), and Delta-marketed SkyWest (OO)
-scheduled passenger service. Rolling ~16-month window, refreshed monthly.
-
-
-
+Covers scheduled passenger service on Delta mainline (DL), Endeavor Air (9E), and the SkyWest (OO) flying marketed as Delta. Republic is excluded because T-100 data can't attribute its flying to one airline. Rolling 36-month window, refreshed monthly.
 
 ## Refreshing data manually
 
@@ -17,9 +12,8 @@ python refresh_data.py                   # normal monthly refresh
 python refresh_data.py --refresh-skywest # also rebuild SkyWest attribution (1-2x/year)
 ```
 
-The GitHub Action does the same thing automatically on the 15th of each month and
-commits `index.html` if BTS published a new month. You can also trigger it from the
-Actions tab ("Run workflow").
+A GitHub Action runs the same refresh on the 15th of each month and commits `index.html` when BTS publishes a new month. The Actions tab ("Run workflow") triggers it on demand.
 
-Data from Bureau of Transportation Statistics — T-100 Segment (All Carriers) and
-Marketing Carrier On-Time Performance.
+International departure times come from the AeroDataBox API. Set the `AERODATABOX_KEY` repository secret to enable them. Without the key the refresh still succeeds and international rows show frequency only.
+
+Sources: Bureau of Transportation Statistics T-100 Segment (All Carriers) and Marketing Carrier On-Time Performance; OurAirports for airport coordinates.
