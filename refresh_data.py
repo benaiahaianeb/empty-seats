@@ -41,6 +41,7 @@ SHARE_CSV = ROOT / "data" / "oo_dl_share.csv"
 DAYS_CSV = ROOT / "data" / "route_days.csv"
 INTL_CSV = ROOT / "data" / "intl_times.csv"
 COORDS_CSV = ROOT / "data" / "airport_coords.csv"
+TZ_CSV = ROOT / "data" / "airport_tz.csv"
 TEMPLATE = ROOT / "template.html"
 OUTPUT = ROOT / "index.html"
 PLACEHOLDER = "/*__DATA__*/null"
@@ -252,6 +253,75 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
           + (f", {left} still missing" if left else ""))
 
 
+ZONE_NAMES = {(-240, -300): "ET", (-300, -360): "CT", (-360, -420): "MT",
+              (-420, -480): "PT", (-480, -540): "AKT", (-540, -600): "HAT",
+              (-600, -600): "HST", (-420, -420): "MST", (-240, -240): "AST",
+              (-660, -660): "SST", (600, 600): "ChST"}
+
+
+def _month_offsets(session, y: int, m: int, anchor: int) -> dict:
+    """UTC offset (minutes) per airport for one month, from scheduled times.
+
+    For any flight, (arrival - departure) mod 1440 - block time equals the
+    destination's offset minus the origin's, so offsets propagate across the
+    route graph from a single anchor (ATL). Results wrap into +/-12 hours.
+    """
+    import collections
+    r = session.get(OTM_URL.format(y=y, m=m), headers=UA, timeout=900)
+    if r.status_code != 200 or "zip" not in r.headers.get("Content-Type", ""):
+        return {}
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    csv_name = [n for n in zf.namelist() if n.lower().endswith(".csv")][0]
+    df = pd.read_csv(zf.open(csv_name),
+                     usecols=["Origin", "Dest", "CRSDepTime", "CRSArrTime",
+                              "CRSElapsedTime"]).dropna()
+    dep = (df.CRSDepTime // 100) % 24 * 60 + df.CRSDepTime % 100
+    arr = (df.CRSArrTime // 100) % 24 * 60 + df.CRSArrTime % 100
+    df = df.assign(delta=((arr - dep) % 1440) - df.CRSElapsedTime)
+    edges = collections.defaultdict(list)
+    for (o, d), v in df.groupby(["Origin", "Dest"]).delta.median().items():
+        v = int(round(v / 15.0) * 15)
+        edges[o].append((d, v))
+        edges[d].append((o, -v))
+    off, seen, q = {"ATL": anchor}, {"ATL"}, collections.deque(["ATL"])
+    while q:
+        a = q.popleft()
+        for b, v in edges[a]:
+            if b not in seen:
+                seen.add(b)
+                off[b] = off[a] + v
+                q.append(b)
+    return {k: ((v + 720) % 1440) - 720 for k, v in off.items()}
+
+
+def rebuild_airport_tz(session, months: list[tuple[int, int]], codes: set) -> None:
+    """Refresh data/airport_tz.csv: one summer and one winter month give each
+    airport its DST behaviour, which names the zone (Phoenix stays on MST,
+    Honolulu never shifts). Zones move rarely, so this only runs when the
+    table is missing or has fallen behind the airport list."""
+    if TZ_CSV.exists():
+        have = set(pd.read_csv(TZ_CSV).code)
+        if len(codes - have) <= max(3, 0.05 * len(codes)):
+            print(f"  {TZ_CSV.name} covers {len(have & codes)}/{len(codes)}; skipping")
+            return
+    jul = next(((y, m) for y, m in reversed(months) if m == 7), None)
+    jan = next(((y, m) for y, m in reversed(months) if m == 1), None)
+    if not jul or not jan:
+        print("  need a July and a January in the window; keeping existing table")
+        return
+    s_off = _month_offsets(session, jul[0], jul[1], -240)
+    w_off = _month_offsets(session, jan[0], jan[1], -300)
+    if not s_off or not w_off:
+        print("  offsets unavailable; keeping existing table")
+        return
+    rows = [(c, s_off[c], w_off[c], ZONE_NAMES.get((s_off[c], w_off[c]), ""))
+            for c in sorted(set(s_off) & set(w_off))]
+    pd.DataFrame(rows, columns=["code", "summer", "winter", "tz"]).to_csv(
+        TZ_CSV, index=False)
+    named = sum(1 for r in rows if r[3])
+    print(f"  wrote {TZ_CSV} ({len(rows)} airports, {named} named zones)")
+
+
 def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
     """Snapshot normal departure times and operating days for Delta
     international routes.
@@ -446,11 +516,17 @@ def main() -> int:
              car[r.UNIQUE_CARRIER]] for _, r in g.iterrows()]
 
     window_months = sorted({(int(y), int(mo)) for y, mo in zip(g.YEAR, g.MONTH)})
-    print("Rebuilding operating-days table ...")
+    print("Rebuilding operating-days table ...")  # window_months set above
     rebuild_route_days(session, window_months)
 
     print("Refreshing airport coordinates ...")
     rebuild_coords(session, set(codes))
+
+    print("Checking timezone table ...")
+    try:
+        rebuild_airport_tz(session, window_months, set(codes))
+    except Exception as e:
+        print(f"  timezone refresh failed: {e}")
 
     print("Refreshing international departure times ...")
     try:
@@ -519,6 +595,12 @@ def main() -> int:
     print(f"International times embedded: {len(intl_times)} "
           f"(sampled origins: {len(intl_meta['sampled'])})")
 
+    tz: dict[str, str] = {}
+    if TZ_CSV.exists():
+        tt = pd.read_csv(TZ_CSV)
+        tz = {c: str(l) for c, l in zip(tt.code, tt.tz)
+              if c in idx and isinstance(l, str) and l and l != "nan"}
+
     coords: dict[str, list[float]] = {}
     if COORDS_CSV.exists():
         cc = pd.read_csv(COORDS_CSV)
@@ -528,7 +610,7 @@ def main() -> int:
     import json
     payload = json.dumps({"airports": airports, "rows": rows, "coords": coords,
                           "days": days, "dm": dm, "times": times, "arrs": arrivals,
-                          "intlTimes": intl_times, "intlMeta": intl_meta},
+                          "intlTimes": intl_times, "intlMeta": intl_meta, "tz": tz},
                          separators=(",", ":"))
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:

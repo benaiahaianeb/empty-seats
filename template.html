@@ -273,6 +273,7 @@
           <button class="chip" data-radf="250">250</button>
           <button class="chip" data-radf="500">500 mi</button>
         </div>
+        <button class="chip" id="directChip">Nonstop only</button>
         <span class="chip-cap">Sort</span>
         <div class="chip-group" id="sortGroup">
           <button class="chip on" data-asort="open">Open seats</button>
@@ -417,7 +418,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open"
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altDirect:false
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -457,12 +458,14 @@ function freqLabel(fpd){
 const DAYS = DATA.days || {};
 const TIMES = DATA.times || {};
 const ARRS = DATA.arrs || {};   // scheduled arrivals, index-aligned with TIMES
+const TZ = DATA.tz || {};       // airport -> zone abbreviation
+const tzOf = c => TZ[c]? " "+TZ[c] : "";
 const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
 const IMETA = DATA.intlMeta || {label:"", sampled:[]};
 const ISAMPLED = new Set(IMETA.sampled);
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
 const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
-function schedHTML(fpd, o, d, dmi, extra){
+function schedHTML(fpd, o, d, dmi, extra, tzc){
   const key = o+"-"+d;
   const mk = (dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
   const tl = (dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
@@ -492,7 +495,7 @@ function schedHTML(fpd, o, d, dmi, extra){
   } else if(banks && banks.length===1 && fpd>=0.9){
     label = "Daily";
   }
-  if(banks && banks.length) parts.push(banks.map(fmtT).join(" · "));
+  if(banks && banks.length) parts.push(banks.map(fmtT).join(" · ")+(tzc? tzOf(tzc):""));
   return '<span class="sched"><b>'+(label || freqLabel(fpd))+'</b>'
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")
     +(extra? '<small class="arrline">'+extra+"</small>" : "")+"</span>";
@@ -688,7 +691,7 @@ function earliestArrival(legs, dmi){
   }
   return best;
 }
-const arrText = a => a? ("Arrives "+fmtT(a.t)+(a.nd? " +1 day":"")) : "";
+const arrText = (a, at) => a? ("Arrives "+fmtT(a.t)+tzOf(at)+(a.nd? " +1 day":"")) : "";
 function opsOnDay(o, d, dmi, dow){
   if(dow<0) return true;
   const key=o+"-"+d;
@@ -731,7 +734,7 @@ function computeAlts(){
       if(direct && !isDeadRoute(direct.fpd, no.code, nd.code, dmi)
           && opsOnDay(no.code, nd.code, dmi, dow))
         options.push({legs:[{f:no.code,t:nd.code,m:direct}], bn:direct.open, direct:true});
-      for(const h in viaHub){
+      for(const h in (state.altDirect? {} : viaHub)){
         if(h===nd.code) continue;
         const m2=metricFromSeries(hubSer[h].get(di));
         if(!m2 || m2.fpd<MINF || isDeadRoute(m2.fpd, h, nd.code, dmi)) continue;
@@ -774,9 +777,10 @@ function renderAlts(){
   sum.innerHTML="<strong>"+list.length+(list.length===1?" option":" options")+"</strong> "+oa[0]+" → "+D[0]
     +" · "+dayTxt+" · "+whenTxt+(isWeek?' <span class="estbadge">Estimate</span>':"")
     +" · departure radius "+state.altRadFrom+" mi, destination radius "+state.altRadTo+" mi"
+    +(state.altDirect? " · nonstop only" : "")
     +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
   if(!list.length){
-    cont.innerHTML='<div class="empty">No service for this pair on '+dayTxt+'.</div>';
+    cont.innerHTML='<div class="empty">No '+(state.altDirect?"nonstop ":"")+'service for this pair on '+dayTxt+'.</div>';
     return;
   }
   const dmi=currentDaysIdx();
@@ -794,7 +798,7 @@ function renderAlts(){
       +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
     if(r.legs.length===1){
       const colB=lfColor(r.m.lf), colT=lfText(r.m.lf);
-      html+=schedHTML(r.m.fpd, r.o, r.d, dmi, arrText(r.arr))
+      html+=schedHTML(r.m.fpd, r.o, r.d, dmi, arrText(r.arr, r.d), r.o)
         +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+colB+'"></span></span><span class="lfnum" style="color:'+colT+'">'+r.m.lf.toFixed(0)+"%</span></span>"
         +'<span class="opennum" style="color:'+colT+'">'+Math.round(r.m.open)+'<small class="mcap">open seats/flight</small></span>';
     } else {
@@ -805,7 +809,7 @@ function renderAlts(){
           +'<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
       }).join("");
       html+='<span class="legs">'+legHtml
-        +(r.arr? '<small class="arrline">'+arrText(r.arr)+"</small>" : "")+"</span>"
+        +(r.arr? '<small class="arrline">'+arrText(r.arr, r.d)+"</small>" : "")+"</span>"
         +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+'<small>min open/leg</small></span>';
     }
     html+="</div>";
@@ -1070,6 +1074,11 @@ dMenu.addEventListener("mousedown",e=>{
     const b=e.target.closest("[data-radf]"); if(!b) return;
     state.altRadFrom=+b.dataset.radf;
     e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("directChip").addEventListener("click",e=>{
+    state.altDirect=!state.altDirect;
+    e.currentTarget.classList.toggle("on",state.altDirect);
     renderBoard();
   });
   document.getElementById("sortGroup").addEventListener("click",e=>{
