@@ -128,6 +128,8 @@
   .sched.irr b{font-weight:400;color:var(--text-secondary)}
   .sched small{display:block;font-size:12px;color:var(--text-secondary);margin-top:1px}
   .sched .noflying{color:var(--text-secondary)}
+  .arrline{font-size:11px;color:var(--text-secondary)}
+  .legs .arrline{flex-basis:100%;margin-top:2px}
   .altcode{font-size:13px !important}
   .altrow{cursor:default}
   .altrow.orig{box-shadow:inset 3px 0 0 var(--primary)}
@@ -264,14 +266,19 @@
         </div>
         <span class="chip-cap">Day</span>
         <div class="chip-group" id="dowGroup"></div>
-        <span class="chip-cap">Leave within</span>
+        <span class="chip-cap">Departure radius</span>
         <div class="chip-group" id="radFromGroup">
           <button class="chip" data-radf="50">50</button>
           <button class="chip on" data-radf="100">100</button>
           <button class="chip" data-radf="250">250</button>
           <button class="chip" data-radf="500">500 mi</button>
         </div>
-        <span class="chip-cap">Land within</span>
+        <span class="chip-cap">Sort</span>
+        <div class="chip-group" id="sortGroup">
+          <button class="chip on" data-asort="open">Open seats</button>
+          <button class="chip" data-asort="arr">Arrival</button>
+        </div>
+        <span class="chip-cap">Destination radius</span>
         <div class="chip-group" id="radToGroup">
           <button class="chip" data-radt="50">50</button>
           <button class="chip on" data-radt="100">100</button>
@@ -410,7 +417,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open"
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -449,12 +456,13 @@ function freqLabel(fpd){
 // DATA.days: "ORG-DST" -> array of 7-bit masks (bit 0 = Monday) aligned to DATA.dm.
 const DAYS = DATA.days || {};
 const TIMES = DATA.times || {};
+const ARRS = DATA.arrs || {};   // scheduled arrivals, index-aligned with TIMES
 const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
 const IMETA = DATA.intlMeta || {label:"", sampled:[]};
 const ISAMPLED = new Set(IMETA.sampled);
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
 const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
-function schedHTML(fpd, o, d, dmi){
+function schedHTML(fpd, o, d, dmi, extra){
   const key = o+"-"+d;
   const mk = (dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
   const tl = (dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
@@ -486,7 +494,8 @@ function schedHTML(fpd, o, d, dmi){
   }
   if(banks && banks.length) parts.push(banks.map(fmtT).join(" · "));
   return '<span class="sched"><b>'+(label || freqLabel(fpd))+'</b>'
-    +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
+    +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")
+    +(extra? '<small class="arrline">'+extra+"</small>" : "")+"</span>";
 }
 const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
 const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -638,6 +647,48 @@ function nearbyWithin(code, miles){
   return out;
 }
 // does this route operate on weekday `dow` (0=Mon)? unknown pattern = assume yes
+const MCT = 45; // minutes: minimum hub connection assumed for arrival estimates
+const hhmmMin = t => Math.floor(t/100)*60 + t%100;
+function banksOf(o, d, dmi){
+  const key=o+"-"+d;
+  const t=(dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
+  const a=(dmi>=0 && ARRS[key])? ARRS[key][dmi] : null;
+  if(t && t.length) return {dep:t, arr:(a && a.length===t.length)? a : null};
+  if(ITIMES[key] && ITIMES[key].length>1) return {dep:ITIMES[key].slice(1), arr:null};
+  return null;
+}
+// earliest scheduled arrival at the final destination; null when unknown.
+// connections assume a same-day hub connection of at least MCT minutes.
+function earliestArrival(legs, dmi){
+  if(legs.length===1){
+    const b=banksOf(legs[0].f, legs[0].t, dmi);
+    if(!b || !b.arr) return null;
+    let best=null;
+    for(let i=0;i<b.dep.length;i++){
+      const nd = hhmmMin(b.arr[i]) < hhmmMin(b.dep[i]);
+      const key = hhmmMin(b.arr[i]) + (nd?1440:0);
+      if(best===null || key<best.key) best={t:b.arr[i], nd, key};
+    }
+    return best;
+  }
+  const b1=banksOf(legs[0].f, legs[0].t, dmi), b2=banksOf(legs[1].f, legs[1].t, dmi);
+  if(!b1 || !b1.arr || !b2 || !b2.arr) return null;
+  let best=null;
+  for(let i=0;i<b1.dep.length;i++){
+    const d1=hhmmMin(b1.dep[i]), a1=hhmmMin(b1.arr[i]);
+    if(a1<d1) continue; // first leg lands the next day; not modelled
+    for(let j=0;j<b2.dep.length;j++){
+      if(hhmmMin(b2.dep[j]) < a1+MCT) continue;
+      const a2=hhmmMin(b2.arr[j]);
+      const nd = a2 < d1;
+      const key = a2 + (nd?1440:0);
+      if(best===null || key<best.key) best={t:b2.arr[j], nd, key};
+      break; // banks are time-ordered, so the first feasible one lands earliest
+    }
+  }
+  return best;
+}
+const arrText = a => a? ("Arrives "+fmtT(a.t)+(a.nd? " +1 day":"")) : "";
 function opsOnDay(o, d, dmi, dow){
   if(dow<0) return true;
   const key=o+"-"+d;
@@ -694,13 +745,16 @@ function computeAlts(){
       const dOpt=options.find(o=>o.direct);
       if(dOpt && dOpt.bn >= best.bn-5) best=dOpt; // prefer nonstop when close
       list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi,
-                 legs:best.legs, bn:best.bn,
+                 legs:best.legs, bn:best.bn, arr:earliestArrival(best.legs, dmi),
                  m:best.legs.length===1? best.legs[0].m : null,
                  worstLf:Math.max(...best.legs.map(l=>l.m.lf)),
                  orig:no.code===O && nd.code===D});
     }
   }
-  list.sort((a,b)=>b.bn-a.bn);
+  if(state.altSort==="arr")
+    list.sort((a,b)=> (a.arr===null)-(b.arr===null)
+      || ((a.arr&&b.arr)? a.arr.key-b.arr.key : 0) || (b.bn-a.bn));
+  else list.sort((a,b)=>b.bn-a.bn);
   return list;
 }
 function renderAlts(){
@@ -719,8 +773,8 @@ function renderAlts(){
   const dayTxt = state.altDow<0? "any day" : DOW_FULL[state.altDow];
   sum.innerHTML="<strong>"+list.length+(list.length===1?" option":" options")+"</strong> "+oa[0]+" → "+D[0]
     +" · "+dayTxt+" · "+whenTxt+(isWeek?' <span class="estbadge">Estimate</span>':"")
-    +" · within "+state.altRadFrom+" mi of you, "+state.altRadTo+" mi of "+D[0]
-    +" · ranked by open seats";
+    +" · departure radius "+state.altRadFrom+" mi, destination radius "+state.altRadTo+" mi"
+    +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
   if(!list.length){
     cont.innerHTML='<div class="empty">No service for this pair on '+dayTxt+'.</div>';
     return;
@@ -740,7 +794,7 @@ function renderAlts(){
       +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
     if(r.legs.length===1){
       const colB=lfColor(r.m.lf), colT=lfText(r.m.lf);
-      html+=schedHTML(r.m.fpd, r.o, r.d, dmi)
+      html+=schedHTML(r.m.fpd, r.o, r.d, dmi, arrText(r.arr))
         +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+colB+'"></span></span><span class="lfnum" style="color:'+colT+'">'+r.m.lf.toFixed(0)+"%</span></span>"
         +'<span class="opennum" style="color:'+colT+'">'+Math.round(r.m.open)+'<small class="mcap">open seats/flight</small></span>';
     } else {
@@ -750,7 +804,8 @@ function renderAlts(){
         return (li? '<span class="legarrow">›</span>':'')
           +'<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
       }).join("");
-      html+='<span class="legs">'+legHtml+"</span>"
+      html+='<span class="legs">'+legHtml
+        +(r.arr? '<small class="arrline">'+arrText(r.arr)+"</small>" : "")+"</span>"
         +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+'<small>min open/leg</small></span>';
     }
     html+="</div>";
@@ -1014,6 +1069,12 @@ dMenu.addEventListener("mousedown",e=>{
   document.getElementById("radFromGroup").addEventListener("click",e=>{
     const b=e.target.closest("[data-radf]"); if(!b) return;
     state.altRadFrom=+b.dataset.radf;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("sortGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-asort]"); if(!b) return;
+    state.altSort=b.dataset.asort;
     e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
     renderBoard();
   });

@@ -138,6 +138,36 @@ def _time_banks(minutes: list[int]) -> list[int]:
     return sorted(set(out))
 
 
+def _dep_arr_banks(pairs: list[tuple[int, int]]) -> tuple[list[int], list[int]]:
+    """Cluster (departure, arrival) minute pairs into normal daily banks.
+
+    Clusters on departure exactly like _time_banks; each surviving bank also
+    reports the median scheduled arrival of the flights in it, so departure
+    and arrival lists stay index-aligned. Both are local clock times.
+    """
+    ps = sorted(pairs)
+    clusters, cur = [], [ps[0]]
+    for x in ps[1:]:
+        if x[0] - cur[-1][0] > 40:
+            clusters.append(cur)
+            cur = [x]
+        else:
+            cur.append(x)
+    clusters.append(cur)
+    maxc = max(len(c) for c in clusters)
+    deps, arrs = [], []
+    for c in clusters:
+        if len(c) < max(1, 0.4 * maxc):
+            continue
+        d = int(round(c[len(c) // 2][0] / 5.0) * 5) % 1440
+        a = sorted(x[1] for x in c)[len(c) // 2]
+        a = int(round(a / 5.0) * 5) % 1440
+        deps.append(d // 60 * 100 + d % 60)
+        arrs.append(a // 60 * 100 + a % 60)
+    order = sorted(range(len(deps)), key=lambda i: deps[i])
+    return [deps[i] for i in order], [arrs[i] for i in order]
+
+
 def rebuild_route_days(session, months: list[tuple[int, int]],
                        limit: int | None = None) -> None:
     """Incrementally build data/route_days.csv: per-route, per-month day-of-week
@@ -150,7 +180,7 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
     Months already present in the CSV are kept, months outside the window are
     dropped, and only missing months are downloaded (typically one per run).
     """
-    cols = ["o", "d", "ym", "mask", "times"]
+    cols = ["o", "d", "ym", "mask", "times", "arrs"]
     have = pd.DataFrame(columns=cols)
     if DAYS_CSV.exists():
         old = pd.read_csv(DAYS_CSV)
@@ -178,15 +208,17 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
         df = pd.read_csv(zf.open(csv_name),
                          usecols=["FlightDate", "Marketing_Airline_Network",
                                   "Operating_Airline ", "Origin", "Dest",
-                                  "CRSDepTime"], dtype=str)
+                                  "CRSDepTime", "CRSArrTime"], dtype=str)
         # match the T-100 load coverage: DL-marketed AND operated by
         # mainline/Endeavor/SkyWest (Republic etc. are excluded from loads)
         df = df[(df.Marketing_Airline_Network == "DL")
                 & (df["Operating_Airline "].isin(["DL", "9E", "OO"]))]
         t = pd.to_numeric(df.CRSDepTime, errors="coerce")
+        ta = pd.to_numeric(df.CRSArrTime, errors="coerce")
         dts = pd.to_datetime(df.FlightDate)
         df = df.assign(dow=dts.dt.dayofweek, day=dts.dt.day,
-                       mins=(t // 100) % 24 * 60 + t % 100)
+                       mins=(t // 100) % 24 * 60 + t % 100,
+                       amins=(ta // 100) % 24 * 60 + ta % 100)
         import calendar
         occ = [0] * 7
         for dnum in range(1, calendar.monthrange(y, m)[1] + 1):
@@ -195,14 +227,18 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
         srv = srv[[c >= 0.5 * occ[w] for c, w in zip(srv.day, srv.dow)]]
         masks = srv.groupby(["Origin", "Dest"]).dow.apply(
             lambda s: sum(1 << int(w) for w in set(s))).rename("mask")
-        tdf = df[df.mins.notna()].copy()
+        tdf = df[df.mins.notna() & df.amins.notna()].copy()
         tdf["mins"] = tdf.mins.astype(int)
-        times = tdf.groupby(["Origin", "Dest"]).mins.apply(
-            lambda s: " ".join(str(x) for x in _time_banks(list(s)))).rename("times")
-        add = pd.concat([masks, times], axis=1).reset_index()
-        add.columns = ["o", "d", "mask", "times"]
+        tdf["amins"] = tdf.amins.astype(int)
+        banks = tdf.groupby(["Origin", "Dest"]).apply(
+            lambda g: _dep_arr_banks(list(zip(g.mins, g.amins))))
+        times = banks.apply(lambda b: " ".join(str(x) for x in b[0])).rename("times")
+        arrs = banks.apply(lambda b: " ".join(str(x) for x in b[1])).rename("arrs")
+        add = pd.concat([masks, times, arrs], axis=1).reset_index()
+        add.columns = ["o", "d", "mask", "times", "arrs"]
         add["mask"] = add["mask"].fillna(0).astype(int)
         add["times"] = add.times.fillna("")
+        add["arrs"] = add.arrs.fillna("")
         add["ym"] = f"{y}-{m:02d}"
         frames.append(add[cols])
         done += 1
@@ -432,8 +468,10 @@ def main() -> int:
         has_t = "times" in dd.columns
         tmp_d: dict[tuple[str, str], list[int]] = {}
         tmp_t: dict[tuple[str, str], list] = {}
+        tmp_a: dict[tuple[str, str], list] = {}
         tvals = dd.times if has_t else [""] * len(dd)
-        for o, d, ym, mk, tv in zip(dd.o, dd.d, dd.ym, dd["mask"], tvals):
+        avals = dd.arrs if "arrs" in dd.columns else [""] * len(dd)
+        for o, d, ym, mk, tv, av in zip(dd.o, dd.d, dd.ym, dd["mask"], tvals, avals):
             if (o, d) not in route_set or ym not in dmi:
                 continue
             tmp_d.setdefault((o, d), [0] * len(dm))[dmi[ym]] = int(mk)
@@ -441,10 +479,16 @@ def main() -> int:
             if tv and tv != "nan":
                 tmp_t.setdefault((o, d), [None] * len(dm))[dmi[ym]] = \
                     [int(x) for x in tv.split()]
+            av = str(av).strip()
+            if av and av != "nan":
+                tmp_a.setdefault((o, d), [None] * len(dm))[dmi[ym]] = \
+                    [int(x) for x in av.split()]
         days = {f"{o}-{d}": arr for (o, d), arr in tmp_d.items()
                 if any(0 < v < 127 for v in arr)}
         times = {f"{o}-{d}": arr for (o, d), arr in tmp_t.items()}
-    print(f"Embedded: {len(days)} day-limited routes, {len(times)} routes with times")
+        arrivals = {f"{o}-{d}": arr for (o, d), arr in tmp_a.items()}
+    print(f"Embedded: {len(days)} day-limited routes, {len(times)} routes with times, "
+          f"{len(arrivals)} with arrival times")
 
     intl_times: dict[str, list[int]] = {}
     if INTL_CSV.exists():
@@ -483,7 +527,7 @@ def main() -> int:
 
     import json
     payload = json.dumps({"airports": airports, "rows": rows, "coords": coords,
-                          "days": days, "dm": dm, "times": times,
+                          "days": days, "dm": dm, "times": times, "arrs": arrivals,
                           "intlTimes": intl_times, "intlMeta": intl_meta},
                          separators=(",", ":"))
     template = TEMPLATE.read_text()
