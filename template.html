@@ -197,7 +197,7 @@
 
   <div class="controls">
     <div>
-      <label class="ctl-label" for="originInput">Departing from</label>
+      <label class="ctl-label" for="originInput" id="originLabel">Departing from</label>
       <div class="origin-box">
         <input id="originInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Type airport or city…">
         <div id="originMenu" class="origin-menu" role="listbox"></div>
@@ -256,6 +256,22 @@
         <button class="chip" data-vibe="city">City breaks</button>
         <button class="chip on" id="gemChip" title="Hide the mega-cities and hubs; show only smaller, less-obvious destinations">Off the beaten path</button>
       </div>
+      <div class="chip-group" id="homeGroup" style="display:none">
+        <span class="chip-cap">Home</span>
+        <div class="origin-box" style="width:210px">
+          <input id="homeInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Airport or city" style="font-size:13px;padding:6px 10px">
+          <div id="homeMenu" class="origin-menu" role="listbox"></div>
+        </div>
+        <span class="chip-cap">Day</span>
+        <div class="chip-group" id="dowGroup"></div>
+        <span class="chip-cap">Within</span>
+        <div class="chip-group" id="radGroup">
+          <button class="chip" data-rad="50">50 mi</button>
+          <button class="chip" data-rad="100">100 mi</button>
+          <button class="chip on" data-rad="250">250 mi</button>
+          <button class="chip" data-rad="500">500 mi</button>
+        </div>
+      </div>
       <div class="chip-group" id="altGroup" style="display:none">
         <span class="chip-cap">To</span>
         <div class="origin-box" style="width:240px">
@@ -272,6 +288,7 @@
     <button class="vtab on" id="tabBoard">Departure board</button>
     <button class="vtab" id="tabTrip">Trip finder</button>
     <button class="vtab" id="tabAlt">Alternatives</button>
+    <button class="vtab" id="tabHome">Get home</button>
   </div>
 
   <div class="summary" id="summary"></div>
@@ -283,6 +300,13 @@
       <button class="th" data-sort="fpd">Schedule <span class="arr"></span></button>
       <button class="th" data-sort="lf" style="padding-left:14px">Cabin fill (load factor) <span class="arr"></span></button>
       <button class="th right active" data-sort="open">Open/flight <span class="arr">▼</span></button>
+    </div>
+    <div class="thead" id="theadHome" style="display:none">
+      <span class="th">From</span>
+      <span class="th">City</span>
+      <span class="th">Departs</span>
+      <span class="th">Cabin fill (load factor)</span>
+      <span class="th right">Open/flight</span>
     </div>
     <div id="rows"></div>
   </div>
@@ -394,7 +418,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest"
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", homeDest:null, homeDow:(new Date().getDay()+6)%7, homeRadius:250
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -473,6 +497,7 @@ function schedHTML(fpd, o, d, dmi){
     +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")+"</span>";
 }
 const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
+const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 function dayCount(mask){
   let n=0;
   for(let i=0;i<7;i++) if(mask>>i&1) n++;
@@ -611,6 +636,81 @@ function nearbyCodes(code){
   }
   return out;
 }
+function nearbyWithin(code, miles){
+  const out=[];
+  for(const a of A){
+    const mi = a[0]===code? 0 : distMi(code, a[0]);
+    if(mi!=null && mi<=miles) out.push({code:a[0], mi});
+  }
+  return out;
+}
+// every nonstop departure toward the home airport on one weekday
+function computeHome(){
+  if(state.homeDest==null) return null;
+  const homeIdx=state.homeDest, homeCode=A[homeIdx][0];
+  const dmi=currentDaysIdx();
+  const out=[];
+  for(const n of nearbyWithin(A[state.origin][0], state.homeRadius)){
+    const oi=CODE_IDX.get(n.code);
+    if(oi==null || oi===homeIdx || !byOrigin.has(oi)) continue;
+    const m=metricFromSeries(destSeries(oi).get(homeIdx));
+    if(!m) continue;
+    if(isDeadRoute(m.fpd, n.code, homeCode, dmi)) continue;
+    const key=n.code+"-"+homeCode;
+    let mask=(dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
+    let banks=(dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
+    if((!banks || !banks.length) && ITIMES[key] && ITIMES[key].length>1){
+      mask=ITIMES[key][0]; banks=ITIMES[key].slice(1);
+    }
+    if(mask>0 && mask<127 && !(mask>>state.homeDow & 1)) continue;
+    if(banks && banks.length) for(const t of banks) out.push({o:n.code, mi:n.mi, m, t, mask});
+    else out.push({o:n.code, mi:n.mi, m, t:null, mask});
+  }
+  out.sort((a,b)=> (a.t===null)-(b.t===null) || (a.t-b.t) || (b.m.open-a.m.open));
+  return out;
+}
+function renderHome(){
+  const cont=document.getElementById("rows");
+  const sum=document.getElementById("summary");
+  const loc=A[state.origin];
+  const list=computeHome();
+  const head=document.getElementById("theadHome");
+  if(list==null){
+    head.style.display="none";
+    sum.innerHTML="<strong>Get home</strong> · pick your home airport";
+    cont.innerHTML='<div class="empty">Enter a home airport above.</div>';
+    return;
+  }
+  const H=A[state.homeDest];
+  const when=state.mode==="week"? "week of "+fmtDate(WEEKS[state.week])
+    : MONTH_FULL[state.month-1]+(state.span==="avg"? " · 3-year average":" "+latestYearFor(state.month));
+  sum.innerHTML="<strong>"+list.length+(list.length===1?" departure":" departures")+"</strong> to "+H[0]
+    +" on "+DOW_FULL[state.homeDow]+" · within "+state.homeRadius+" mi of "+loc[0]+" · "+when
+    +(state.mode==="week"?' <span class="estbadge">Estimate</span>':"");
+  if(!list.length){
+    head.style.display="none";
+    cont.innerHTML='<div class="empty">No nonstop flights to '+H[0]+' that day within '+state.homeRadius+' mi.</div>';
+    return;
+  }
+  head.style.display="";
+  let html="";
+  for(const r of list){
+    const colB=lfColor(r.m.lf), colT=lfText(r.m.lf);
+    const ap=A[CODE_IDX.get(r.o)];
+    const dl=(r.mask>0 && r.mask<127)? daysLabel(r.mask) : null;
+    html+='<div class="rowbtn altrow">'
+      +'<span class="dcode">'+r.o+"</span>"
+      +'<span class="dcity">'+esc(ap[1])
+        +(r.mi>0? '<span class="tag">'+Math.round(r.mi)+" mi away</span>" : '<span class="tag">Your airport</span>')+"</span>"
+      +'<span class="sched"><b>'+(r.t===null? freqLabel(r.m.fpd) : fmtT(r.t))+"</b>"
+        +(dl? "<small>"+dl+"</small>" : "")+"</span>"
+      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+colB+'"></span></span><span class="lfnum" style="color:'+colT+'">'+r.m.lf.toFixed(0)+"%</span></span>"
+      +'<span class="opennum" style="color:'+colT+'">'+Math.round(r.m.open)+'<small class="mcap">open seats/flight</small></span>'
+      +"</div>";
+  }
+  cont.innerHTML=html;
+}
+
 function computeAlts(){
   if(state.altDest==null) return null;
   const O=A[state.origin][0], D=A[state.altDest][0];
@@ -954,6 +1054,48 @@ dMenu.addEventListener("mousedown",e=>{
   renderBoard();
 });
 
+// ---- get home controls ----
+(function(){
+  const dg=document.getElementById("dowGroup");
+  dg.innerHTML=DOW_FULL.map((d,i)=>'<button class="chip'+(i===state.homeDow?" on":"")+'" data-dow="'+i+'">'+d.slice(0,3)+"</button>").join("");
+  dg.addEventListener("click",e=>{
+    const b=e.target.closest("[data-dow]"); if(!b) return;
+    state.homeDow=+b.dataset.dow;
+    dg.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  const rg=document.getElementById("radGroup");
+  rg.addEventListener("click",e=>{
+    const b=e.target.closest("[data-rad]"); if(!b) return;
+    state.homeRadius=+b.dataset.rad;
+    rg.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  const hIn=document.getElementById("homeInput"), hMenu=document.getElementById("homeMenu");
+  function openHomeMenu(q){
+    const ql=(q||"").trim().toLowerCase();
+    const matches=destList.filter(idx=>{
+      const a=A[idx]; return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql);
+    });
+    hMenu.innerHTML=matches.map(idx=>{
+      const a=A[idx];
+      return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
+    }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
+    hMenu.classList.add("open");
+  }
+  hIn.addEventListener("focus",()=>{ hIn.select(); openHomeMenu(""); });
+  hIn.addEventListener("input",()=>openHomeMenu(hIn.value));
+  hIn.addEventListener("blur",()=>setTimeout(()=>{ hMenu.classList.remove("open");
+    if(state.homeDest!=null){ const a=A[state.homeDest]; hIn.value=a[0]+" — "+a[1]; } },150));
+  hMenu.addEventListener("mousedown",e=>{
+    const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
+    state.homeDest=+opt.dataset.idx;
+    hMenu.classList.remove("open");
+    const a=A[state.homeDest]; hIn.value=a[0]+" — "+a[1];
+    renderBoard();
+  });
+})();
+
 // ---- filters ----
 document.getElementById("geoGroup").addEventListener("click",e=>{
   const b=e.target.closest("[data-geo]"); if(!b) return;
@@ -993,18 +1135,23 @@ function setView(v){
   document.getElementById("tabBoard").classList.toggle("on",v==="board");
   document.getElementById("tabTrip").classList.toggle("on",v==="trip");
   document.getElementById("tabAlt").classList.toggle("on",v==="alt");
+  document.getElementById("tabHome").classList.toggle("on",v==="home");
   const board = v==="board";
   document.getElementById("geoGroup").style.display = board? "":"none";
   document.getElementById("freqGroup").style.display = board? "":"none";
   document.getElementById("destSearch").style.display = board? "":"none";
   document.getElementById("vibeGroup").style.display = v==="trip"? "":"none";
   document.getElementById("altGroup").style.display = v==="alt"? "":"none";
+  document.getElementById("homeGroup").style.display = v==="home"? "":"none";
+  document.getElementById("originLabel").textContent = v==="home"? "Your location" : "Departing from";
   document.querySelector(".thead").style.display = board? "":"none";
+  if(v!=="home") document.getElementById("theadHome").style.display="none";
   renderBoard();
 }
 document.getElementById("tabBoard").onclick=()=>setView("board");
 document.getElementById("tabTrip").onclick=()=>setView("trip");
 document.getElementById("tabAlt").onclick=()=>setView("alt");
+document.getElementById("tabHome").onclick=()=>setView("home");
 document.getElementById("gemChip").addEventListener("click",e=>{
   state.gemsOnly=!state.gemsOnly;
   e.currentTarget.classList.toggle("on",state.gemsOnly);
@@ -1021,6 +1168,7 @@ document.getElementById("vibeGroup").addEventListener("click",e=>{
 function renderBoard(){
   if(state.view==="trip"){ renderTrips(); return; }
   if(state.view==="alt"){ renderAlts(); return; }
+  if(state.view==="home"){ renderHome(); return; }
   const isWeek = state.mode==="week";
   const list = isWeek? computeWeek(state.origin,state.week) : computeMonth(state.origin,state.month);
   const cont = document.getElementById("rows");
