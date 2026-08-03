@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Empty Seats Atlas data refresh.
+Empty Seats data refresh.
 
 Downloads the latest BTS T-100 Segment data (Delta mainline DL + Endeavor 9E +
 Delta-marketed SkyWest OO), rebuilds the embedded dataset, and regenerates
@@ -33,7 +33,7 @@ T100_URL = ("https://www.transtats.bts.gov/DL_SelectFields.aspx"
             "?gnoyr_VQ=FMG&QO_fu146_anzr=Nv4+Pn44vr45")
 OTM_URL = ("https://transtats.bts.gov/PREZIP/"
            "On_Time_Marketing_Carrier_On_Time_Performance_Beginning_January_2018_{y}_{m}.zip")
-UA = {"User-Agent": "Mozilla/5.0 (empty-seats-atlas refresh script)"}
+UA = {"User-Agent": "Mozilla/5.0 (empty-seats refresh script)"}
 T100_FIELDS = ["UNIQUE_CARRIER", "ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
                "DEST", "DEST_CITY_NAME", "DEST_COUNTRY",
                "DEPARTURES_PERFORMED", "SEATS", "PASSENGERS", "YEAR", "MONTH", "CLASS"]

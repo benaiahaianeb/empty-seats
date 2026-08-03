@@ -1,4 +1,4 @@
-# Empty Seats Atlas
+# Empty Seats
 
 Finds the Delta routes with the most empty seats, for non-rev standby planning.
 
