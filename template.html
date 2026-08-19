@@ -131,7 +131,14 @@
   .arrline{font-size:11px;color:var(--text-secondary)}
   .legs .arrline{flex-basis:100%;margin-top:2px}
   .altcode{font-size:13px !important}
-  .altrow{cursor:default}
+  .altrow{cursor:pointer}
+  .altdetail{border-bottom:1px solid var(--divider);background:var(--bg);padding:12px 16px 14px;display:none}
+  .altdetail.open{display:block}
+  .legrow+.legrow{margin-top:10px}
+  .legrow b{font-weight:500}
+  .legrow .dim{color:var(--text-secondary);font-size:12px;margin-left:8px}
+  .legtimes{font-variant-numeric:tabular-nums;font-size:13px;margin-top:3px;line-height:1.6}
+  .legtimes .na{color:var(--text-secondary)}
   .altrow.orig{box-shadow:inset 3px 0 0 var(--primary)}
   .altrow .legs{grid-column:span 2;padding-right:10px}
 
@@ -418,7 +425,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altDirect:false
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altDirect:false, altOpen:null
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -760,6 +767,26 @@ function computeAlts(){
   else list.sort((a,b)=>b.bn-a.bn);
   return list;
 }
+function legTimesHTML(f, t, dmi){
+  const b=banksOf(f, t, dmi);
+  const key=f+"-"+t;
+  let mask=(dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
+  if(!mask && ITIMES[key] && ITIMES[key].length>1) mask=ITIMES[key][0];
+  const dl=(mask>0 && mask<127)? daysLabel(mask) : null;
+  let note=dl? dl : "";
+  if(b && TZ[f]) note += (note? " · ":"") + (b.arr && TZ[t] && TZ[t]!==TZ[f]? TZ[f]+" → "+TZ[t] : TZ[f]);
+  let times;
+  if(!b || !b.dep.length) times='<span class="na">No schedule data</span>';
+  else if(b.arr) times=b.dep.map((d,i)=>fmtT(d)+" → "+fmtT(b.arr[i])).join(" · ");
+  else times=b.dep.map(fmtT).join(" · ")+' <span class="na">(departures only)</span>';
+  return '<div class="legrow"><b>'+f+" → "+t+"</b>"
+    +(note? '<span class="dim">'+note+"</span>" : "")
+    +'<div class="legtimes">'+times+"</div></div>";
+}
+function altDetailHTML(r, dmi){
+  return r.legs.map(l=>legTimesHTML(l.f, l.t, dmi)).join("");
+}
+
 function renderAlts(){
   const cont=document.getElementById("rows");
   const sum=document.getElementById("summary");
@@ -793,7 +820,8 @@ function renderAlts(){
       if(r.om>0) tags+='<span class="tag">'+r.o+" · "+Math.round(r.om)+" mi away</span>";
       if(r.dm2>0) tags+='<span class="tag">'+r.d+" · "+Math.round(r.dm2)+" mi away</span>";
     }
-    html+='<div class="rowbtn altrow'+(r.orig?" orig":"")+'">'
+    const akey=r.o+"-"+r.d, isOpen=state.altOpen===akey;
+    html+='<div class="rowbtn altrow'+(r.orig?" orig":"")+'" data-akey="'+akey+'" role="button" tabindex="0" aria-expanded="'+isOpen+'">'
       +'<span class="dcode altcode">'+r.o+'→'+r.d+'</span>'
       +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
     if(r.legs.length===1){
@@ -812,9 +840,15 @@ function renderAlts(){
         +(r.arr? '<small class="arrline">'+arrText(r.arr, r.d)+"</small>" : "")+"</span>"
         +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+'<small>min open/leg</small></span>';
     }
-    html+="</div>";
+    html+="</div>"
+      +'<div class="altdetail'+(isOpen?" open":"")+'">'+(isOpen? altDetailHTML(r, dmi):"")+"</div>";
   });
   cont.innerHTML=html;
+  cont.querySelectorAll(".altrow").forEach(el=>{
+    const toggle=()=>{ state.altOpen = state.altOpen===el.dataset.akey? null : el.dataset.akey; renderBoard(); };
+    el.addEventListener("click", toggle);
+    el.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } });
+  });
 }
 
 function computeTrips(){
