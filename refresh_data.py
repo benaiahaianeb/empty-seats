@@ -451,11 +451,43 @@ def rebuild_coords(session, codes: set[str]) -> None:
     print(f"  wrote {COORDS_CSV} ({len(out)}/{len(codes)} airports)")
 
 
+def rebuild_only() -> int:
+    """Re-render index.html from template.html, reusing the embedded payload.
+
+    For code-only changes: no downloads, no BTS parsing, no API quota spent.
+    The payload is lifted straight out of the committed index.html, so the data
+    window is preserved exactly as the last data refresh left it.
+    """
+    if not OUTPUT.exists():
+        print("ERROR: index.html missing, nothing to reuse"); return 1
+    built = OUTPUT.read_text()
+    m = re.search(r"^const DATA = (.*);$", built, re.M)
+    if not m:
+        print("ERROR: no data payload found in index.html"); return 1
+    payload = m.group(1)
+    template = TEMPLATE.read_text()
+    if PLACEHOLDER not in template:
+        print("ERROR: template.html missing data placeholder"); return 1
+    out = template.replace(PLACEHOLDER, payload)
+    if PLACEHOLDER in out or not out.rstrip().endswith("</html>"):
+        print("ERROR: rebuilt index.html looks malformed"); return 1
+    OUTPUT.write_text(out)
+    print(f"Rebuilt {OUTPUT} ({OUTPUT.stat().st_size/1e6:.2f} MB) "
+          f"from template.html; data payload unchanged ({len(payload)/1e6:.2f} MB)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh-skywest", action="store_true",
                     help="also rebuild the SkyWest->Delta attribution table")
+    ap.add_argument("--rebuild-only", action="store_true",
+                    help="re-render index.html from template.html, reusing the data "
+                         "already embedded in index.html; downloads nothing")
     args = ap.parse_args()
+
+    if args.rebuild_only:
+        return rebuild_only()
 
     session = requests.Session()
     today = dt.date.today()
