@@ -92,8 +92,26 @@
   .chip.on{background:var(--primary-pastel);border-color:var(--primary);color:var(--chip-on-text)}
   .chip-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .chip-cap{font-size:12px;color:var(--text-secondary);margin-right:2px}
+  .optwrap{position:relative}
+  .optbtn{font:inherit;font-size:13px;font-weight:500;padding:5px 12px;border-radius:var(--radius);
+    border:1px solid var(--divider);background:var(--surface);color:var(--text);cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;transition:background-color 150ms ease,color 150ms ease}
+  .optbtn:hover{background:var(--hover)}
+  .optbtn.on{background:var(--primary-pastel);border-color:var(--primary);color:var(--chip-on-text)}
+  .optbtn .caret{font-size:9px;opacity:0.7}
+  .optpanel{display:none;position:absolute;z-index:40;right:0;top:calc(100% + 6px);
+    width:min(600px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--divider);
+    border-radius:var(--radius);box-shadow:var(--shadow-2);padding:14px}
+  .optpanel.open{display:block}
+  .optrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;row-gap:8px}
+  .optrow+.optrow{margin-top:12px;padding-top:12px;border-top:1px solid var(--divider)}
+  /* on a phone it anchors to the bottom of the screen instead: fixed to the
+     static position ran off the bottom edge, and a fixed element cannot be
+     scrolled into view, so the last controls were unreachable */
+  @media(max-width:640px){.optpanel{position:fixed;left:16px;right:16px;width:auto;
+    top:auto;bottom:16px;max-height:75vh;overflow:auto}}
   .spacer{flex:1}
-  .dest-search{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);font-size:13px;
+  .dest-search{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);font-size:14px;
     padding:6px 10px;outline:none;width:190px}
   .dest-search:focus{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
 
@@ -214,29 +232,8 @@
       </div>
     </div>
     <div>
-      <span class="ctl-label">Travel dates
-        <span class="modeswitch">
-          <button id="modeMonth" class="on">Month</button>
-          <button id="modeWeek">Week</button>
-        </span>
-        <span class="modeswitch" id="spanSwitch">
-          <button id="spanLatest" class="on">Latest</button>
-          <button id="spanAvg">3-year average</button>
-        </span>
-        <span class="modeswitch" id="schedSwitch">
-          <button id="schedNewest" class="on">Newest schedule</button>
-          <button id="schedSeasonal">Seasonal schedule</button>
-        </span>
-      </span>
-      <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
-      <div class="weekpick" id="weekPick">
-        <div class="weekrow">
-          <button class="wbtn" id="wPrev" aria-label="Previous week">‹</button>
-          <input type="range" id="weekSlider" min="0" max="1" value="0" aria-label="Select week">
-          <button class="wbtn" id="wNext" aria-label="Next week">›</button>
-        </div>
-        <div class="weekout" id="weekOut"></div>
-      </div>
+      <label class="ctl-label" for="destSearch">Filter destinations</label>
+      <input class="dest-search" id="destSearch" placeholder="Airport, city or country…">
     </div>
     <div class="filters">
       <div class="chip-group" id="geoGroup">
@@ -252,11 +249,6 @@
         <button class="chip" data-minf="0.5">½ daily+</button>
         <button class="chip" data-minf="1">Daily+</button>
         <button class="chip" data-minf="3">3×/day+</button>
-      </div>
-      <div class="chip-group" id="carGroup">
-        <span class="chip-cap">Operators</span>
-        <button class="chip on" data-car="1" title="Endeavor Air, a wholly owned Delta subsidiary">Endeavor 9E</button>
-        <button class="chip on" data-car="2" title="SkyWest segments apportioned by share marketed as Delta in DOT on-time data">SkyWest (est.)</button>
       </div>
       <div class="chip-group" id="vibeGroup" style="display:none">
         <span class="chip-cap">Vibe</span>
@@ -284,7 +276,6 @@
           <button class="chip on" data-stops="1">Up to 1</button>
           <button class="chip" data-stops="2">Up to 2</button>
         </div>
-        <button class="chip" id="intlChip">Include international</button>
         <span class="chip-cap">Sort</span>
         <div class="chip-group" id="sortGroup">
           <button class="chip on" data-asort="open">Open seats</button>
@@ -308,7 +299,49 @@
         </div>
       </div>
       <div class="spacer"></div>
-      <input class="dest-search" id="destSearch" placeholder="Filter destinations…">
+      <div class="optwrap">
+        <button class="optbtn" id="optBtn" aria-expanded="false" aria-controls="optPanel">Options<span class="caret">▼</span></button>
+        <div class="optpanel" id="optPanel" role="group" aria-label="Options">
+          <div class="optrow">
+            <span class="chip-cap">Travel dates</span>
+            <span class="modeswitch">
+              <button id="modeMonth" class="on">Month</button>
+              <button id="modeWeek">Week</button>
+            </span>
+          </div>
+          <div class="optrow">
+            <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
+            <div class="weekpick" id="weekPick">
+              <div class="weekrow">
+                <button class="wbtn" id="wPrev" aria-label="Previous week">‹</button>
+                <input type="range" id="weekSlider" min="0" max="1" value="0" aria-label="Select week">
+                <button class="wbtn" id="wNext" aria-label="Next week">›</button>
+              </div>
+              <div class="weekout" id="weekOut"></div>
+            </div>
+          </div>
+          <div class="optrow">
+            <span class="chip-cap">Open seats</span>
+            <span class="modeswitch" id="spanSwitch">
+              <button id="spanLatest" class="on">Latest</button>
+              <button id="spanAvg">3-year average</button>
+            </span>
+            <span class="chip-cap">Schedule</span>
+            <span class="modeswitch" id="schedSwitch">
+              <button id="schedNewest" class="on">Newest</button>
+              <button id="schedSeasonal">Seasonal</button>
+            </span>
+          </div>
+          <div class="optrow">
+            <div class="chip-group" id="carGroup">
+              <span class="chip-cap">Operators</span>
+              <button class="chip on" data-car="1" title="Endeavor Air, a wholly owned Delta subsidiary">Endeavor 9E</button>
+              <button class="chip on" data-car="2" title="SkyWest segments apportioned by share marketed as Delta in DOT on-time data">SkyWest (est.)</button>
+            </div>
+            <button class="chip" id="intlChip">Include international connections</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1613,6 +1646,19 @@ function seasonHTML(r){
   document.getElementById("stampRange").textContent =
     MONTH_ABBR[p0.m-1].charAt(0)+MONTH_ABBR[p0.m-1].slice(1).toLowerCase()+" "+p0.y+" – "+
     MONTH_ABBR[pn.m-1].charAt(0)+MONTH_ABBR[pn.m-1].slice(1).toLowerCase()+" "+pn.y;
+  (function(){
+    const btn=document.getElementById("optBtn"), panel=document.getElementById("optPanel");
+    const setOpen=o=>{ panel.classList.toggle("open",o); btn.classList.toggle("on",o);
+                       btn.setAttribute("aria-expanded",o?"true":"false"); };
+    btn.addEventListener("click",e=>{ e.stopPropagation(); setOpen(!panel.classList.contains("open")); });
+    // the panel holds live controls, so only a click outside it closes it
+    document.addEventListener("click",e=>{
+      if(panel.classList.contains("open") && !panel.contains(e.target) && e.target!==btn) setOpen(false);
+    });
+    document.addEventListener("keydown",e=>{
+      if(e.key==="Escape" && panel.classList.contains("open")){ setOpen(false); btn.focus(); }
+    });
+  })();
   setOriginInputLabel();
   syncRadChips(); // correct even before the Alternatives tab is first opened
   renderMonths();
