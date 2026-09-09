@@ -273,7 +273,12 @@
         </div>
         <span class="chip-cap">Day</span>
         <div class="chip-group" id="dowGroup"></div>
-        <button class="chip" id="directChip">Nonstop only</button>
+        <span class="chip-cap">Stops</span>
+        <div class="chip-group" id="stopsGroup">
+          <button class="chip" data-stops="0">Nonstop</button>
+          <button class="chip on" data-stops="1">Up to 1</button>
+          <button class="chip" data-stops="2">Up to 2</button>
+        </div>
         <span class="chip-cap">Sort</span>
         <div class="chip-group" id="sortGroup">
           <button class="chip on" data-asort="open">Open seats</button>
@@ -425,7 +430,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altDirect:false, altOpen:null
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altStops:1, altOpen:null
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -670,33 +675,34 @@ function banksOf(o, d, dmi){
 // earliest scheduled arrival at the final destination; null when unknown.
 // connections assume a same-day hub connection of at least MCT minutes.
 function earliestArrival(legs, dmi){
-  if(legs.length===1){
-    const b=banksOf(legs[0].f, legs[0].t, dmi);
-    if(!b || !b.arr) return null;
-    let best=null;
-    for(let i=0;i<b.dep.length;i++){
-      const nd = hhmmMin(b.arr[i]) < hhmmMin(b.dep[i]);
-      const key = hhmmMin(b.arr[i]) + (nd?1440:0);
-      if(best===null || key<best.key) best={t:b.arr[i], nd, key};
-    }
-    return best;
-  }
-  const b1=banksOf(legs[0].f, legs[0].t, dmi), b2=banksOf(legs[1].f, legs[1].t, dmi);
-  if(!b1 || !b1.arr || !b2 || !b2.arr) return null;
+  const bs = legs.map(l=>banksOf(l.f, l.t, dmi));
+  if(bs.some(b=>!b || !b.arr)) return null;
   let best=null;
-  for(let i=0;i<b1.dep.length;i++){
-    const d1=hhmmMin(b1.dep[i]), a1=hhmmMin(b1.arr[i]);
-    if(a1<d1) continue; // first leg lands the next day; not modelled
-    for(let j=0;j<b2.dep.length;j++){
-      if(hhmmMin(b2.dep[j]) < a1+MCT) continue;
-      const a2=hhmmMin(b2.arr[j]);
-      const nd = a2 < d1;
-      const key = a2 + (nd?1440:0);
-      if(best===null || key<best.key) best={t:b2.arr[j], nd, key};
-      break; // banks are time-ordered, so the first feasible one lands earliest
+  for(let i=0;i<bs[0].dep.length;i++){
+    const d0=hhmmMin(bs[0].dep[i]);
+    let cur=hhmmMin(bs[0].arr[i]), lastArr=bs[0].arr[i], ok=true;
+    if(bs.length>1 && cur<d0) continue; // overnight first leg; not modelled
+    for(let L=1;L<bs.length && ok;L++){
+      let hit=-1;
+      for(let j=0;j<bs[L].dep.length;j++){
+        if(hhmmMin(bs[L].dep[j]) >= cur+MCT){ hit=j; break; } // banks are time-ordered
+      }
+      if(hit<0){ ok=false; break; }
+      const dep=hhmmMin(bs[L].dep[hit]), arr=hhmmMin(bs[L].arr[hit]);
+      if(arr<dep && L<bs.length-1){ ok=false; break; } // mid-trip overnight; not modelled
+      cur=arr; lastArr=bs[L].arr[hit];
     }
+    if(!ok) continue;
+    const nd = cur < d0;
+    const key = cur + (nd?1440:0);
+    if(best===null || key<best.key) best={t:lastArr, nd, key};
   }
   return best;
+}
+
+// true when every leg has arrival data, i.e. the chain can actually be checked
+function legsHaveArrivals(legs, dmi){
+  return legs.every(l=>{ const b=banksOf(l.f, l.t, dmi); return !!(b && b.arr); });
 }
 const arrText = (a, at) => a? ("Arrives "+fmtT(a.t)+tzOf(at)+(a.nd? " +1 day":"")) : "";
 function opsOnDay(o, d, dmi, dow){
@@ -717,7 +723,27 @@ function computeAlts(){
     const hi=CODE_IDX.get(h);
     if(hi!=null && byOrigin.has(hi)) hubSer[h]=destSeries(hi);
   }
+  const maxStops=state.altStops;
+  const hubHub={}; // hub -> hub leg, independent of origin and destination
+  if(maxStops>=2){
+    for(const h1 in hubSer){
+      hubHub[h1]={};
+      for(const h2 in hubSer){
+        if(h1===h2) continue;
+        const m=metricFromSeries(hubSer[h1].get(CODE_IDX.get(h2)));
+        if(!m || m.fpd<MINF || isDeadRoute(m.fpd, h1, h2, dmi)) continue;
+        if(!opsOnDay(h1, h2, dmi, dow)) continue;
+        hubHub[h1][h2]=m;
+      }
+    }
+  }
   const froms=nearbyCodes(O, state.altRadFrom), tos=nearbyCodes(D, state.altRadTo);
+  // A hub you could simply drive to is not a connection. Flying into an airport
+  // inside your own departure radius means backtracking past it (RST -> MSP when
+  // you are at MSP); connecting at an airport inside the destination radius means
+  // flying past a landing point you already accept.
+  const fromSet=new Set(froms.map(x=>x.code)), toSet=new Set(tos.map(x=>x.code));
+  const hubOK = h => !fromSet.has(h) && !toSet.has(h);
   const list=[];
   for(const no of froms){
     const oi=CODE_IDX.get(no.code);
@@ -725,7 +751,7 @@ function computeAlts(){
     const ser=destSeries(oi);
     const viaHub={}; // origin -> hub leg, same for every destination
     for(const h in hubSer){
-      if(h===no.code) continue;
+      if(h===no.code || !hubOK(h)) continue;
       const m1=metricFromSeries(ser.get(CODE_IDX.get(h)));
       if(!m1 || m1.fpd<MINF) continue;
       if(isDeadRoute(m1.fpd, no.code, h, dmi)) continue;
@@ -741,21 +767,50 @@ function computeAlts(){
       if(direct && !isDeadRoute(direct.fpd, no.code, nd.code, dmi)
           && opsOnDay(no.code, nd.code, dmi, dow))
         options.push({legs:[{f:no.code,t:nd.code,m:direct}], bn:direct.open, direct:true});
-      for(const h in (state.altDirect? {} : viaHub)){
-        if(h===nd.code) continue;
-        const m2=metricFromSeries(hubSer[h].get(di));
-        if(!m2 || m2.fpd<MINF || isDeadRoute(m2.fpd, h, nd.code, dmi)) continue;
-        if(!opsOnDay(h, nd.code, dmi, dow)) continue;
-        options.push({legs:[{f:no.code,t:h,m:viaHub[h]},{f:h,t:nd.code,m:m2}],
-                      bn:Math.min(viaHub[h].open,m2.open), direct:false});
+      // last leg into this destination from each hub, reused by 1- and 2-stop options
+      const toDest={};
+      if(maxStops>=1){
+        for(const h in hubSer){
+          if(h===nd.code || h===no.code || !hubOK(h)) continue;
+          const m=metricFromSeries(hubSer[h].get(di));
+          if(!m || m.fpd<MINF || isDeadRoute(m.fpd, h, nd.code, dmi)) continue;
+          if(!opsOnDay(h, nd.code, dmi, dow)) continue;
+          toDest[h]=m;
+        }
+      }
+      if(maxStops>=1){
+        for(const h in viaHub){
+          if(!toDest[h]) continue;
+          options.push({legs:[{f:no.code,t:h,m:viaHub[h]},{f:h,t:nd.code,m:toDest[h]}],
+                        bn:Math.min(viaHub[h].open, toDest[h].open)});
+        }
+      }
+      if(maxStops>=2){
+        for(const h1 in viaHub){
+          for(const h2 in (hubHub[h1]||{})){
+            if(h2===nd.code || h2===no.code || !toDest[h2]) continue;
+            options.push({legs:[{f:no.code,t:h1,m:viaHub[h1]},
+                                {f:h1,t:h2,m:hubHub[h1][h2]},
+                                {f:h2,t:nd.code,m:toDest[h2]}],
+                          bn:Math.min(viaHub[h1].open, hubHub[h1][h2].open, toDest[h2].open)});
+          }
+        }
       }
       if(!options.length) continue;
-      options.sort((a,b)=>b.bn-a.bn);
-      let best=options[0];
-      const dOpt=options.find(o=>o.direct);
-      if(dOpt && dOpt.bn >= best.bn-5) best=dOpt; // prefer nonstop when close
+      // drop connections that cannot be made the same day; keep ones we can't
+      // check (international legs carry departures but no arrivals)
+      for(const o of options) o.arr=earliestArrival(o.legs, dmi);
+      const usable=options.filter(o=> o.legs.length===1 || o.arr!==null
+                                      || !legsHaveArrivals(o.legs, dmi));
+      if(!usable.length) continue;
+      usable.sort((a,b)=>b.bn-a.bn);
+      let best=usable[0];
+      for(let k=1;k<=3;k++){ // prefer the fewest stops that stays within 5 open seats
+        const cand=usable.find(o=>o.legs.length===k);
+        if(cand && cand.bn >= best.bn-5){ best=cand; break; }
+      }
       list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi,
-                 legs:best.legs, bn:best.bn, arr:earliestArrival(best.legs, dmi),
+                 legs:best.legs, bn:best.bn, arr:best.arr,
                  m:best.legs.length===1? best.legs[0].m : null,
                  worstLf:Math.max(...best.legs.map(l=>l.m.lf)),
                  orig:no.code===O && nd.code===D});
@@ -804,10 +859,10 @@ function renderAlts(){
   sum.innerHTML="<strong>"+list.length+(list.length===1?" option":" options")+"</strong> "+oa[0]+" → "+D[0]
     +" · "+dayTxt+" · "+whenTxt+(isWeek?' <span class="estbadge">Estimate</span>':"")
     +" · departure radius "+state.altRadFrom+" mi, destination radius "+state.altRadTo+" mi"
-    +(state.altDirect? " · nonstop only" : "")
+    +(state.altStops===0? " · nonstop only" : " · up to "+state.altStops+(state.altStops===1?" stop":" stops"))
     +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
   if(!list.length){
-    cont.innerHTML='<div class="empty">No '+(state.altDirect?"nonstop ":"")+'service for this pair on '+dayTxt+'.</div>';
+    cont.innerHTML='<div class="empty">No '+(state.altStops===0?"nonstop ":"")+'service for this pair on '+dayTxt+'.</div>';
     return;
   }
   const dmi=currentDaysIdx();
@@ -1110,9 +1165,10 @@ dMenu.addEventListener("mousedown",e=>{
     e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
     renderBoard();
   });
-  document.getElementById("directChip").addEventListener("click",e=>{
-    state.altDirect=!state.altDirect;
-    e.currentTarget.classList.toggle("on",state.altDirect);
+  document.getElementById("stopsGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-stops]"); if(!b) return;
+    state.altStops=+b.dataset.stops;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
     renderBoard();
   });
   document.getElementById("sortGroup").addEventListener("click",e=>{
