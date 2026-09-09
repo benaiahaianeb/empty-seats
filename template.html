@@ -294,7 +294,7 @@
         <div class="chip-group" id="radFromGroup">
           <button class="chip" data-radf="0">0</button>
           <button class="chip" data-radf="50">50</button>
-          <button class="chip on" data-radf="100">100</button>
+          <button class="chip" data-radf="100">100</button>
           <button class="chip" data-radf="250">250</button>
           <button class="chip" data-radf="500">500 mi</button>
         </div>
@@ -302,7 +302,7 @@
         <div class="chip-group" id="radToGroup">
           <button class="chip" data-radt="0">0</button>
           <button class="chip" data-radt="50">50</button>
-          <button class="chip on" data-radt="100">100</button>
+          <button class="chip" data-radt="100">100</button>
           <button class="chip" data-radt="250">250</button>
           <button class="chip" data-radt="500">500 mi</button>
         </div>
@@ -440,7 +440,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altStops:1, altIntl:false, altOpen:null
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -692,6 +692,28 @@ function distMi(a, b){
         + Math.cos(c1[0]*p)*Math.cos(c2[0]*p)*Math.sin((c2[1]-c1[1])*p/2)**2;
   return 2*3959*Math.asin(Math.sqrt(h));
 }
+// Radius defaults to 0 - just this airport - except where ALT_EXTRA gives the
+// airport a manual pairing, which only takes effect above 0, so those default to
+// 50 to pick it up. null in state means "not chosen yet, follow the airport";
+// once a radius is clicked that choice sticks and changing airports no longer
+// moves it.
+const defaultRad = code => (ALT_EXTRA[code] && ALT_EXTRA[code].length)? 50 : 0;
+function radFrom(){
+  return state.altRadFrom!=null? state.altRadFrom : defaultRad(A[state.origin][0]);
+}
+function radTo(){
+  if(state.altRadTo!=null) return state.altRadTo;
+  return state.altDest==null? 0 : defaultRad(A[state.altDest][0]);
+}
+function syncRadChips(){
+  const set=(g,attr,v)=>{
+    const grp=document.getElementById(g);
+    if(!grp) return;
+    grp.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on", +c.dataset[attr]===v));
+  };
+  set("radFromGroup","radf",radFrom());
+  set("radToGroup","radt",radTo());
+}
 function nearbyCodes(code, miles){
   const lim = miles==null? ALT_MI : miles;
   const out=[{code, mi:0}];
@@ -840,7 +862,7 @@ function computeAlts(){
   const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
   const MINF=0.4; // ~3x/week per connecting leg, as in the trip finder
   const maxStops=state.altStops;
-  const froms=nearbyCodes(O, state.altRadFrom), tos=nearbyCodes(D, state.altRadTo);
+  const froms=nearbyCodes(O, radFrom()), tos=nearbyCodes(D, radTo());
   // An airport you could simply drive to is not a connection. Flying into an
   // airport inside your own departure radius means backtracking past it (RST ->
   // MSP when you are at MSP); connecting inside the destination radius means
@@ -1007,6 +1029,7 @@ function altDetailHTML(r, dmi){
 function renderAlts(){
   const cont=document.getElementById("rows");
   const sum=document.getElementById("summary");
+  syncRadChips(); // the effective radius follows the airport until one is picked
   const oa=A[state.origin];
   const isWeek=state.mode==="week";
   const whenTxt = whenText();
@@ -1020,8 +1043,8 @@ function renderAlts(){
   const dayTxt = state.altDow<0? "any day" : DOW_FULL[state.altDow];
   sum.innerHTML="<strong>"+list.length+(list.length===1?" option":" options")+"</strong> "+oa[0]+" → "+D[0]
     +" · "+dayTxt+" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"")
-    +" · "+(state.altRadFrom===0? oa[0]+" only" : "departure radius "+state.altRadFrom+" mi")
-    +", "+(state.altRadTo===0? D[0]+" only" : "destination radius "+state.altRadTo+" mi")
+    +" · "+(radFrom()===0? oa[0]+" only" : "departure radius "+radFrom()+" mi")
+    +", "+(radTo()===0? D[0]+" only" : "destination radius "+radTo()+" mi")
     +(state.altStops===0? " · nonstop only" : " · up to "+state.altStops+(state.altStops===1?" stop":" stops"))
     +(state.altIntl? " · international connections included" : "")
     +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
@@ -1591,6 +1614,7 @@ function seasonHTML(r){
     MONTH_ABBR[p0.m-1].charAt(0)+MONTH_ABBR[p0.m-1].slice(1).toLowerCase()+" "+p0.y+" – "+
     MONTH_ABBR[pn.m-1].charAt(0)+MONTH_ABBR[pn.m-1].slice(1).toLowerCase()+" "+pn.y;
   setOriginInputLabel();
+  syncRadChips(); // correct even before the Alternatives tab is first opened
   renderMonths();
   renderWeekOut();
   renderBoard();
