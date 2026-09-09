@@ -222,6 +222,10 @@
           <button id="spanLatest" class="on">Latest</button>
           <button id="spanAvg">3-year average</button>
         </span>
+        <span class="modeswitch" id="schedSwitch">
+          <button id="schedNewest" class="on">Newest schedule</button>
+          <button id="schedSeasonal">Seasonal schedule</button>
+        </span>
       </span>
       <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
       <div class="weekpick" id="weekPick">
@@ -279,6 +283,7 @@
           <button class="chip on" data-stops="1">Up to 1</button>
           <button class="chip" data-stops="2">Up to 2</button>
         </div>
+        <button class="chip" id="intlChip">Include international</button>
         <span class="chip-cap">Sort</span>
         <div class="chip-group" id="sortGroup">
           <button class="chip on" data-asort="open">Open seats</button>
@@ -346,9 +351,12 @@ function daysIn(y,m){ return new Date(y,m,0).getDate(); }
 const A = DATA.airports;               // [code, city, country]
 const rows = DATA.rows;                // [oIdx, dIdx, year, month, dep, seats, pax, carrier]
 const byOrigin = new Map();
+const byDest = new Map();
 for(const r of rows){
   if(!byOrigin.has(r[0])) byOrigin.set(r[0],[]);
   byOrigin.get(r[0]).push(r);
+  if(!byDest.has(r[1])) byDest.set(r[1],[]);
+  byDest.get(r[1]).push(r);
 }
 // chronological month points across the data range
 const pointKey = (y,m)=> y*100+m;
@@ -381,7 +389,6 @@ for(const r of rows){ originSeats.set(r[0],(originSeats.get(r[0])||0)+r[5]); }
 const originList = [...byOrigin.keys()].sort((a,b)=>(originSeats.get(b)||0)-(originSeats.get(a)||0));
 
 // ---- trip finder config ----
-const HUBS = ["ATL","MSP","DTW","SLC","JFK","LGA","BOS","LAX","SEA"];
 const VIBES = {
   // sun & beach; g = hidden gem
   CUN:["sun"],MBJ:["sun"],PUJ:["sun"],PLS:["sun"],NAS:["sun"],AUA:["sun"],SXM:["sun"],STT:["sun"],
@@ -430,7 +437,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 let state = {
   origin:null, mode:"month", month:null, week:0,
   geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altStops:1, altOpen:null
+  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:100, altRadTo:100, altSort:"open", altStops:1, altIntl:false, altOpen:null
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -481,7 +488,14 @@ function schedHTML(fpd, o, d, dmi, extra, tzc){
   const key = o+"-"+d;
   const mk = (dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
   const tl = (dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
-  if(fpd<0.9 && !mk && !(tl && tl.length)){
+  // "Irregular" describes the flying in the month being viewed, not the month the
+  // schedule is read from: a summer route has no January schedule but is not a
+  // charter. So this test always asks the viewed month, even when the days and
+  // times beside it come from a newer one.
+  const vdi = currentDaysIdx();
+  const vmk = (vdi>=0 && DAYS[key])? DAYS[key][vdi] : 0;
+  const vtl = (vdi>=0 && TIMES[key])? TIMES[key][vdi] : null;
+  if(fpd<0.9 && !vmk && !(vtl && vtl.length)){
     // domestic route absent from scheduled-service records: charter/diversion ops
     const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
     if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US")
@@ -539,6 +553,25 @@ function currentDaysIdx(){
   const k = p.y+"-"+String(p.m).padStart(2,"0");
   return DM_IDX.has(k)? DM_IDX.get(k) : -1;
 }
+// Which month's days and times to display. Loads are seasonal so they always
+// come from the viewed month, but a schedule is only useful if you can still
+// book it, and the viewed month can be up to 11 months old. "newest" reads the
+// freshest month in the window; "seasonal" keeps the viewed month's own
+// schedule, which is right for the season but stale. Either way the summary
+// line names the month it came from, so neither reads as live data.
+const NEWEST_DMI = (DATA.dm||[]).length-1;
+function schedIdx(){ return state.sched==="newest"? NEWEST_DMI : currentDaysIdx(); }
+function dmLabel(i){
+  const t=(DATA.dm||[])[i];
+  if(!t) return "";
+  const p=t.split("-");
+  return MONTH_FULL[+p[1]-1]+" "+p[0];
+}
+function schedNote(){
+  const i=schedIdx();
+  return i>=0? " · schedule from "+dmLabel(i) : "";
+}
+
 // planning tool: hide flights that can no longer be taken.
 // domestic month with no scheduled-service record = charter/diversion ops;
 // intl route absent from the sampled current+seasonal schedule = discontinued.
@@ -580,6 +613,23 @@ function destSeries(originIdx){
     if(!p) continue;
     if(!out.has(r[1])) out.set(r[1], new Array(POINTS.length));
     const arr = out.get(r[1]);
+    if(!arr[p.i]) arr[p.i]={dep:0,seats:0,pax:0};
+    const a=arr[p.i]; a.dep+=r[4]; a.seats+=r[5]; a.pax+=r[6];
+  }
+  return out;
+}
+// aggregate one destination's rows into origin -> pointIndex -> {dep,seats,pax}.
+// the mirror of destSeries: it answers "who flies into here", which is what a
+// connection search needs for its last leg.
+function originSeries(destIdx){
+  const list = byDest.get(destIdx)||[];
+  const out = new Map();
+  for(const r of list){
+    if(r[7]!==0 && !state.cars.has(r[7])) continue;
+    const p = PIDX.get(pointKey(r[2],r[3]));
+    if(!p) continue;
+    if(!out.has(r[0])) out.set(r[0], new Array(POINTS.length));
+    const arr = out.get(r[0]);
     if(!arr[p.i]) arr[p.i]={dep:0,seats:0,pax:0};
     const a=arr[p.i]; a.dep+=r[4]; a.seats+=r[5]; a.pax+=r[6];
   }
@@ -661,6 +711,72 @@ function nearbyWithin(code, miles){
   }
   return out;
 }
+// Scheduled block time from great-circle distance, fitted on the 80,256
+// same-timezone departure/arrival pairs in this dataset, where the zone offset
+// cancels and the gap is pure block time. Median error 7 minutes, 90th
+// percentile 16, and it still lands within a few minutes at transcontinental
+// range (2,475 mi predicts 359 min against a real ~360). Two caveats remain:
+// beyond about 2,500 miles it extrapolates past its data and reads roughly half
+// an hour long, and it is directionless, while headwinds swing a transatlantic
+// block by around an hour each way. So every number built on it says "est.",
+// and the duration - which needs no timezone at all - leads.
+const BLK_BASE = 45.4, BLK_PER_MI = 0.1267;
+function estBlockMin(o, d){
+  const mi = distMi(o, d);
+  return mi==null? null : Math.round(BLK_BASE + BLK_PER_MI*mi);
+}
+// Real UTC offset for an airport in a given month, from its IANA zone, so the
+// destination's own DST rules apply. TZ (derived from BTS block times) only ever
+// covered domestic airports and is a label rather than an offset; TZN covers all
+// of them. Against the derived table the two agree on all 234 domestic airports,
+// and swapping longitude for this drops the estimated-arrival error from a
+// 31-minute median to 8. A zone we do not have returns null, and the caller
+// shows no clock time rather than a guessed one.
+const TZN = DATA.tzn || {};
+const _offCache = new Map();
+function utcOffMin(code, ym){
+  const z = TZN[code];
+  if(!z || !ym) return null;
+  const k = code+"|"+ym;
+  if(_offCache.has(k)) return _offCache.get(k);
+  let v = null;
+  try{
+    const d = new Date(Date.UTC(+ym.slice(0,4), +ym.slice(5,7)-1, 15, 18));
+    const part = new Intl.DateTimeFormat("en-US",{timeZone:z, timeZoneName:"longOffset"})
+      .formatToParts(d).find(x=>x.type==="timeZoneName");
+    const m = part && part.value.match(/GMT([+-])(\d{2}):(\d{2})/);
+    if(m) v = (m[1]==="-"? -1:1)*(+m[2]*60 + +m[3]);
+  }catch(e){ v = null; }
+  _offCache.set(k, v);
+  return v;
+}
+function durText(min){
+  if(min==null) return "";
+  const h=Math.floor(min/60), m=min%60;
+  if(!h) return m+" min";
+  return m? h+" hr "+m+" min" : h+" hr";
+}
+// estimated arrival for a leg we have no arrival times for
+function estArrival(o, d, dep, dmi){
+  const blk=estBlockMin(o,d);
+  if(blk==null) return null;
+  const ym=(DATA.dm||[])[dmi>=0? dmi : NEWEST_DMI];
+  const oo=utcOffMin(o,ym), od=utcOffMin(d,ym);
+  if(oo==null || od==null) return {t:null, nd:false, blk};
+  let t=hhmmMin(dep)+blk+(od-oo);
+  const nd = t>=1440 || t<0;
+  t=((t%1440)+1440)%1440;
+  return {t:Math.floor(t/60)*100+t%60, nd, blk};
+}
+function estLegText(o, d, dep, dmi){
+  const e=estArrival(o,d,dep,dmi);
+  if(!e) return "";
+  // the duration stands on its own; the clock time only appears when both zones
+  // are known, so an unknown zone shows nothing rather than a wrong time
+  return "est. "+durText(e.blk)
+    +(e.t==null? "" : " (arrives "+fmtT(e.t)+(e.nd? " +1 day":"")+" local)");
+}
+
 // does this route operate on weekday `dow` (0=Mon)? unknown pattern = assume yes
 const MCT = 45; // minutes: minimum hub connection assumed for arrival estimates
 const hhmmMin = t => Math.floor(t/100)*60 + t%100;
@@ -716,47 +832,87 @@ function opsOnDay(o, d, dmi, dow){
 function computeAlts(){
   if(state.altDest==null) return null;
   const O=A[state.origin][0], D=A[state.altDest][0];
-  const dmi=currentDaysIdx(), dow=state.altDow;
+  // dmi = the viewed month, which decides whether a route still exists at all.
+  // sdi = the schedule month, which decides what days and times it runs.
+  const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
   const MINF=0.4; // ~3x/week per connecting leg, as in the trip finder
-  const hubSer={};
-  for(const h of HUBS){
-    const hi=CODE_IDX.get(h);
-    if(hi!=null && byOrigin.has(hi)) hubSer[h]=destSeries(hi);
-  }
   const maxStops=state.altStops;
-  const hubHub={}; // hub -> hub leg, independent of origin and destination
-  if(maxStops>=2){
-    for(const h1 in hubSer){
-      hubHub[h1]={};
-      for(const h2 in hubSer){
-        if(h1===h2) continue;
-        const m=metricFromSeries(hubSer[h1].get(CODE_IDX.get(h2)));
-        if(!m || m.fpd<MINF || isDeadRoute(m.fpd, h1, h2, dmi)) continue;
-        if(!opsOnDay(h1, h2, dmi, dow)) continue;
-        hubHub[h1][h2]=m;
-      }
-    }
-  }
   const froms=nearbyCodes(O, state.altRadFrom), tos=nearbyCodes(D, state.altRadTo);
-  // A hub you could simply drive to is not a connection. Flying into an airport
-  // inside your own departure radius means backtracking past it (RST -> MSP when
-  // you are at MSP); connecting at an airport inside the destination radius means
+  // An airport you could simply drive to is not a connection. Flying into an
+  // airport inside your own departure radius means backtracking past it (RST ->
+  // MSP when you are at MSP); connecting inside the destination radius means
   // flying past a landing point you already accept.
   const fromSet=new Set(froms.map(x=>x.code)), toSet=new Set(tos.map(x=>x.code));
-  const hubOK = h => !fromSet.has(h) && !toSet.has(h);
+  // Foreign connecting points sit behind the toggle. Their onward legs carry no
+  // departure times at all in this data, so a connection through one can never
+  // be checked for same-day feasibility - it is offered, not verified.
+  const usOnly = !state.altIntl;
+  const isUS = c => { const i=CODE_IDX.get(c); return i!=null && A[i][2]==="US"; };
+  const viaOK = c => !fromSet.has(c) && !toSet.has(c) && (!usOnly || isUS(c));
+  // A connection has to go roughly the same way as the trip. Without this the
+  // widest-open seats win outright and a domestic pair gets routed over Seoul or
+  // London: those legs are widebodies with hundreds of empty seats and, having no
+  // arrival times, they escape the same-day check as well. Unknown geography is
+  // allowed through rather than hidden.
+  const MAX_CIRCUITY = state.altIntl? 4 : 2.5;
+  function circuityOK(codes){
+    const dd=distMi(codes[0], codes[codes.length-1]);
+    if(dd==null || dd<=0) return true;
+    let sum=0;
+    for(let i=0;i+1<codes.length;i++){
+      const leg=distMi(codes[i], codes[i+1]);
+      if(leg==null) return true;
+      sum+=leg;
+    }
+    return sum <= dd*MAX_CIRCUITY;
+  }
+
+  // Connections are not restricted to Delta hubs: any airport with enough
+  // service on both legs can carry one (MSP -> MSN -> BOS). destSeries and the
+  // per-leg verdict are both cached for the render, which is what keeps the
+  // wider search affordable - the same leg is asked about once, not once per
+  // origin/destination pair.
+  const serCache=new Map();
+  const serOf=i=>{ if(!serCache.has(i)) serCache.set(i,destSeries(i)); return serCache.get(i); };
+  const legCache=new Map();
+  function legMetric(fi, ti){ // usable connecting leg, or null
+    const k=fi*100000+ti;
+    if(legCache.has(k)) return legCache.get(k);
+    const f=A[fi][0], t=A[ti][0];
+    let m=metricFromSeries(serOf(fi).get(ti));
+    if(m && (m.fpd<MINF || isDeadRoute(m.fpd,f,t,dmi) || !opsOnDay(f,t,sdi,dow))) m=null;
+    legCache.set(k,m||null);
+    return m||null;
+  }
+
+  // last leg into each destination, from anywhere; independent of the origin
+  const toDestByD={};
+  for(const nd of tos){
+    const di=CODE_IDX.get(nd.code);
+    if(di==null) continue;
+    const t={};
+    if(maxStops>=1){
+      for(const xi of originSeries(di).keys()){
+        const xc=A[xi][0];
+        if(xc===nd.code || !viaOK(xc)) continue;
+        const m=legMetric(xi, di);
+        if(m) t[xc]=m;
+      }
+    }
+    toDestByD[nd.code]=t;
+  }
+
   const list=[];
   for(const no of froms){
     const oi=CODE_IDX.get(no.code);
     if(oi==null || !byOrigin.has(oi)) continue;
-    const ser=destSeries(oi);
-    const viaHub={}; // origin -> hub leg, same for every destination
-    for(const h in hubSer){
-      if(h===no.code || !hubOK(h)) continue;
-      const m1=metricFromSeries(ser.get(CODE_IDX.get(h)));
-      if(!m1 || m1.fpd<MINF) continue;
-      if(isDeadRoute(m1.fpd, no.code, h, dmi)) continue;
-      if(!opsOnDay(no.code, h, dmi, dow)) continue;
-      viaHub[h]=m1;
+    const ser=serOf(oi);
+    const viaFrom={}; // first leg out of this origin, same for every destination
+    for(const xi of ser.keys()){
+      const xc=A[xi][0];
+      if(xc===no.code || !viaOK(xc)) continue;
+      const m=legMetric(oi, xi);
+      if(m) viaFrom[xc]=m;
     }
     for(const nd of tos){
       if(nd.code===no.code) continue;
@@ -765,43 +921,39 @@ function computeAlts(){
       const options=[];
       const direct=metricFromSeries(ser.get(di));
       if(direct && !isDeadRoute(direct.fpd, no.code, nd.code, dmi)
-          && opsOnDay(no.code, nd.code, dmi, dow))
+          && opsOnDay(no.code, nd.code, sdi, dow))
         options.push({legs:[{f:no.code,t:nd.code,m:direct}], bn:direct.open, direct:true});
-      // last leg into this destination from each hub, reused by 1- and 2-stop options
-      const toDest={};
+      const toDest=toDestByD[nd.code]||{};
       if(maxStops>=1){
-        for(const h in hubSer){
-          if(h===nd.code || h===no.code || !hubOK(h)) continue;
-          const m=metricFromSeries(hubSer[h].get(di));
-          if(!m || m.fpd<MINF || isDeadRoute(m.fpd, h, nd.code, dmi)) continue;
-          if(!opsOnDay(h, nd.code, dmi, dow)) continue;
-          toDest[h]=m;
-        }
-      }
-      if(maxStops>=1){
-        for(const h in viaHub){
-          if(!toDest[h]) continue;
-          options.push({legs:[{f:no.code,t:h,m:viaHub[h]},{f:h,t:nd.code,m:toDest[h]}],
-                        bn:Math.min(viaHub[h].open, toDest[h].open)});
+        for(const x in viaFrom){
+          if(x===nd.code || x===no.code) continue;
+          const m2=toDest[x];
+          if(!m2 || !circuityOK([no.code,x,nd.code])) continue;
+          options.push({legs:[{f:no.code,t:x,m:viaFrom[x]},{f:x,t:nd.code,m:m2}],
+                        bn:Math.min(viaFrom[x].open, m2.open)});
         }
       }
       if(maxStops>=2){
-        for(const h1 in viaHub){
-          for(const h2 in (hubHub[h1]||{})){
-            if(h2===nd.code || h2===no.code || !toDest[h2]) continue;
-            options.push({legs:[{f:no.code,t:h1,m:viaHub[h1]},
-                                {f:h1,t:h2,m:hubHub[h1][h2]},
-                                {f:h2,t:nd.code,m:toDest[h2]}],
-                          bn:Math.min(viaHub[h1].open, hubHub[h1][h2].open, toDest[h2].open)});
+        for(const x1 in viaFrom){
+          if(x1===nd.code || x1===no.code) continue;
+          const x1i=CODE_IDX.get(x1);
+          for(const x2 in toDest){
+            if(x2===x1 || x2===no.code || x2===nd.code) continue;
+            const mm=legMetric(x1i, CODE_IDX.get(x2));
+            if(!mm || !circuityOK([no.code,x1,x2,nd.code])) continue;
+            options.push({legs:[{f:no.code,t:x1,m:viaFrom[x1]},
+                                {f:x1,t:x2,m:mm},
+                                {f:x2,t:nd.code,m:toDest[x2]}],
+                          bn:Math.min(viaFrom[x1].open, mm.open, toDest[x2].open)});
           }
         }
       }
       if(!options.length) continue;
       // drop connections that cannot be made the same day; keep ones we can't
       // check (international legs carry departures but no arrivals)
-      for(const o of options) o.arr=earliestArrival(o.legs, dmi);
+      for(const o of options) o.arr=earliestArrival(o.legs, sdi);
       const usable=options.filter(o=> o.legs.length===1 || o.arr!==null
-                                      || !legsHaveArrivals(o.legs, dmi));
+                                      || !legsHaveArrivals(o.legs, sdi));
       if(!usable.length) continue;
       usable.sort((a,b)=>b.bn-a.bn);
       let best=usable[0];
@@ -833,7 +985,14 @@ function legTimesHTML(f, t, dmi){
   let times;
   if(!b || !b.dep.length) times='<span class="na">No schedule data</span>';
   else if(b.arr) times=b.dep.map((d,i)=>fmtT(d)+" → "+fmtT(b.arr[i])).join(" · ");
-  else times=b.dep.map(fmtT).join(" · ")+' <span class="na">(departures only)</span>';
+  else {
+    // no arrival times for this leg: lead with the estimated flight time, which
+    // needs no timezone, and put the clock arrival behind it
+    const est=estLegText(f, t, b.dep[0], dmi);
+    times=b.dep.map(fmtT).join(" · ")
+      + (est? ' <span class="na">'+esc(est)+"</span>"
+            : ' <span class="na">(departures only)</span>');
+  }
   return '<div class="legrow"><b>'+f+" → "+t+"</b>"
     +(note? '<span class="dim">'+note+"</span>" : "")
     +'<div class="legtimes">'+times+"</div></div>";
@@ -857,15 +1016,16 @@ function renderAlts(){
   const D=A[state.altDest];
   const dayTxt = state.altDow<0? "any day" : DOW_FULL[state.altDow];
   sum.innerHTML="<strong>"+list.length+(list.length===1?" option":" options")+"</strong> "+oa[0]+" → "+D[0]
-    +" · "+dayTxt+" · "+whenTxt+(isWeek?' <span class="estbadge">Estimate</span>':"")
+    +" · "+dayTxt+" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"")
     +" · departure radius "+state.altRadFrom+" mi, destination radius "+state.altRadTo+" mi"
     +(state.altStops===0? " · nonstop only" : " · up to "+state.altStops+(state.altStops===1?" stop":" stops"))
+    +(state.altIntl? " · international connections included" : "")
     +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
   if(!list.length){
     cont.innerHTML='<div class="empty">No '+(state.altStops===0?"nonstop ":"")+'service for this pair on '+dayTxt+'.</div>';
     return;
   }
-  const dmi=currentDaysIdx();
+  const dmi=schedIdx(); // days and times shown come from the schedule month
   let html="";
   list.forEach(r=>{
     const co=A[CODE_IDX.get(r.o)], cd=A[CODE_IDX.get(r.d)];
@@ -881,7 +1041,12 @@ function renderAlts(){
       +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
     if(r.legs.length===1){
       const colB=lfColor(r.m.lf), colT=lfText(r.m.lf);
-      html+=schedHTML(r.m.fpd, r.o, r.d, dmi, arrText(r.arr, r.d), r.o)
+      let arrLine=arrText(r.arr, r.d);
+      if(!arrLine){ // no arrival times: estimated flight time, clock time behind it
+        const b=banksOf(r.o, r.d, dmi);
+        if(b && b.dep.length) arrLine=estLegText(r.o, r.d, b.dep[0], dmi);
+      }
+      html+=schedHTML(r.m.fpd, r.o, r.d, dmi, arrLine, r.o)
         +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+colB+'"></span></span><span class="lfnum" style="color:'+colT+'">'+r.m.lf.toFixed(0)+"%</span></span>"
         +'<span class="opennum" style="color:'+colT+'">'+Math.round(r.m.open)+'<small class="mcap">open seats/flight</small></span>';
     } else {
@@ -909,15 +1074,46 @@ function renderAlts(){
 function computeTrips(){
   const oIdx = state.origin, oCode = A[oIdx][0];
   const oSer = destSeries(oIdx);
-  const hubSer = {};
-  for(const h of HUBS){
-    if(h===oCode) continue;
-    const hi = CODE_IDX.get(h);
-    if(hi==null || !byOrigin.has(hi)) continue;
-    hubSer[h] = {idx:hi, ser:destSeries(hi), m:metricFromSeries(oSer.get(hi))};
-  }
   const MINF = 0.4; // ~3x/week per leg minimum for realistic standby
-  const dmi = currentDaysIdx();
+  // dmi decides whether a route still exists; sdi is the schedule being shown
+  const dmi = currentDaysIdx(), sdi = schedIdx();
+  // Same rules as the Alternatives tab: any airport with enough service on both
+  // legs can carry a connection, not just the nine hubs, but it has to lie
+  // roughly on the way and it cannot be the origin itself.
+  const usOnly = !state.altIntl;
+  const isUS = c => { const i=CODE_IDX.get(c); return i!=null && A[i][2]==="US"; };
+  const MAX_CIRCUITY = state.altIntl? 4 : 2.5;
+  function circuityOK(codes){
+    const dd=distMi(codes[0], codes[codes.length-1]);
+    if(dd==null || dd<=0) return true;
+    let sum=0;
+    for(let i=0;i+1<codes.length;i++){
+      const leg=distMi(codes[i], codes[i+1]);
+      if(leg==null) return true;
+      sum+=leg;
+    }
+    return sum <= dd*MAX_CIRCUITY;
+  }
+  const serCache=new Map();
+  const serOf=i=>{ if(!serCache.has(i)) serCache.set(i,destSeries(i)); return serCache.get(i); };
+  const legCache=new Map();
+  function legMetric(fi, ti){
+    const k=fi*100000+ti;
+    if(legCache.has(k)) return legCache.get(k);
+    const f=A[fi][0], t=A[ti][0];
+    let m=metricFromSeries(serOf(fi).get(ti));
+    if(m && (m.fpd<MINF || isDeadRoute(m.fpd,f,t,dmi))) m=null;
+    legCache.set(k, m||null);
+    return m||null;
+  }
+  // first leg out of the origin, shared by every destination
+  const viaFrom={};
+  for(const xi of oSer.keys()){
+    const xc=A[xi][0];
+    if(xc===oCode || (usOnly && !isUS(xc))) continue;
+    const m=legMetric(oIdx, xi);
+    if(m) viaFrom[xc]=m;
+  }
   const out = [];
   for(const code in VIBES){
     const tags = VIBES[code];
@@ -929,18 +1125,23 @@ function computeTrips(){
     const direct = metricFromSeries(oSer.get(d));
     if(direct && direct.fpd>=MINF && !isDeadRoute(direct.fpd,oCode,code,dmi))
       options.push({legs:[{f:oCode,t:code,m:direct}], bn:direct.open, direct:true});
-    for(const h in hubSer){
-      if(h===code) continue;
-      const m1 = hubSer[h].m;
-      if(!m1 || m1.fpd<MINF || isDeadRoute(m1.fpd,oCode,h,dmi)) continue;
-      const m2 = metricFromSeries(hubSer[h].ser.get(d));
-      if(!m2 || m2.fpd<MINF || isDeadRoute(m2.fpd,h,code,dmi)) continue;
-      options.push({legs:[{f:oCode,t:h,m:m1},{f:h,t:code,m:m2}], bn:Math.min(m1.open,m2.open), direct:false});
+    for(const xi of originSeries(d).keys()){
+      const xc=A[xi][0];
+      if(xc===code || xc===oCode || !viaFrom[xc]) continue;
+      const m2=legMetric(xi, d);
+      if(!m2 || !circuityOK([oCode,xc,code])) continue;
+      options.push({legs:[{f:oCode,t:xc,m:viaFrom[xc]},{f:xc,t:code,m:m2}],
+                    bn:Math.min(viaFrom[xc].open, m2.open), direct:false});
     }
     if(!options.length) continue;
-    options.sort((a,b)=>b.bn-a.bn);
-    let best = options[0];
-    const dOpt = options.find(o=>o.direct);
+    // drop connections that cannot be made the same day; keep the ones we cannot
+    // check, which is international legs carrying departures but no arrivals
+    const usable=options.filter(o=> o.legs.length===1
+      || earliestArrival(o.legs, sdi)!==null || !legsHaveArrivals(o.legs, sdi));
+    if(!usable.length) continue;
+    usable.sort((a,b)=>b.bn-a.bn);
+    let best = usable[0];
+    const dOpt = usable.find(o=>o.direct);
     if(dOpt && dOpt.bn >= best.bn-5) best = dOpt; // prefer nonstop when close
     const ap = A[d];
     out.push({d, code, city:ap[1], tags, legs:best.legs, bn:best.bn,
@@ -1096,6 +1297,14 @@ function setSpan(sp){
 }
 document.getElementById("spanLatest").onclick=()=>setSpan("latest");
 document.getElementById("spanAvg").onclick=()=>setSpan("avg");
+function setSched(sc){
+  state.sched=sc; state.expanded=null; state.altOpen=null;
+  document.getElementById("schedNewest").classList.toggle("on",sc==="newest");
+  document.getElementById("schedSeasonal").classList.toggle("on",sc==="seasonal");
+  renderBoard();
+}
+document.getElementById("schedNewest").onclick=()=>setSched("newest");
+document.getElementById("schedSeasonal").onclick=()=>setSched("seasonal");
 
 // ---- origin picker ----
 const oi = document.getElementById("originInput");
@@ -1163,6 +1372,12 @@ dMenu.addEventListener("mousedown",e=>{
     const b=e.target.closest("[data-radf]"); if(!b) return;
     state.altRadFrom=+b.dataset.radf;
     e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("intlChip").addEventListener("click",e=>{
+    state.altIntl=!state.altIntl;
+    e.currentTarget.classList.toggle("on",state.altIntl);
+    state.altOpen=null;
     renderBoard();
   });
   document.getElementById("stopsGroup").addEventListener("click",e=>{
@@ -1260,14 +1475,14 @@ function renderBoard(){
   const sum = document.getElementById("summary");
   const whenTxt = whenText();
   if(list.length){
-    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">Estimate</span>':"");
+    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"");
   } else sum.textContent="";
 
   if(!list.length){
     cont.innerHTML='<div class="empty">No routes match.</div>';
     return;
   }
-  const dmi = currentDaysIdx();
+  const dmi = schedIdx();
   let html="";
   list.forEach((r,i)=>{
     const colB=lfColor(r.lf), colT=lfText(r.lf);

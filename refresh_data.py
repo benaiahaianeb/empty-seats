@@ -42,6 +42,7 @@ DAYS_CSV = ROOT / "data" / "route_days.csv"
 INTL_CSV = ROOT / "data" / "intl_times.csv"
 COORDS_CSV = ROOT / "data" / "airport_coords.csv"
 TZ_CSV = ROOT / "data" / "airport_tz.csv"
+IANA_CSV = ROOT / "data" / "airport_iana.csv"
 TEMPLATE = ROOT / "template.html"
 OUTPUT = ROOT / "index.html"
 PLACEHOLDER = "/*__DATA__*/null"
@@ -426,6 +427,54 @@ def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
 
 
 
+# Airports whose IATA code postdates the OpenFlights dump (it stopped being
+# updated in 2017). Checked by hand against the airport's published local time.
+IANA_EXTRA = {
+    "BER": "Europe/Berlin",     # Brandenburg, opened 2020
+    "DSS": "Africa/Dakar",      # Blaise Diagne, opened 2017
+    "TQO": "America/Cancun",    # Tulum, opened 2023
+    "XWA": "America/Chicago",   # Williston Basin, opened 2019
+}
+
+
+def rebuild_iana(session, codes: set[str]) -> None:
+    """Refresh data/airport_iana.csv (IANA time zone per airport) from the
+    OpenFlights dump; keeps the existing file on failure.
+
+    airport_tz.csv derives a zone *label* for domestic airports out of BTS block
+    times, which is all the schedule column needs. Estimating an arrival time
+    needs a real UTC offset for a given date, including the destination's own DST
+    rules, and no foreign airport gets a label from that derivation at all. The
+    IANA name gives the browser both, for every airport. Where the two sources
+    overlap they agree on all 234 domestic airports, so this is a widening of the
+    derived table rather than a replacement for it.
+    """
+    url = ("https://raw.githubusercontent.com/jpatokal/openflights/master"
+           "/data/airports.dat")
+    try:
+        r = session.get(url, headers=UA, timeout=300)
+        df = pd.read_csv(io.BytesIO(r.content), header=None,
+                         names=["id", "name", "city", "country", "iata", "icao",
+                                "lat", "lon", "alt", "utc", "dst", "tz",
+                                "type", "source"],
+                         usecols=["iata", "tz"])
+    except Exception as e:
+        print(f"  IANA zone refresh failed ({e}); keeping existing file")
+        return
+    found = {str(c): str(z) for c, z in zip(df.iata, df.tz)
+             if isinstance(c, str) and len(str(c)) == 3
+             and isinstance(z, str) and "/" in str(z)}
+    found.update(IANA_EXTRA)
+    rows = sorted((c, found[c]) for c in codes if c in found)
+    if not rows:
+        print("  IANA zone refresh returned nothing; keeping existing file")
+        return
+    pd.DataFrame(rows, columns=["code", "tz"]).to_csv(IANA_CSV, index=False)
+    missing = sorted(codes - {c for c, _ in rows})
+    print(f"  wrote {IANA_CSV} ({len(rows)}/{len(codes)} airports)"
+          + (f"; no zone for {', '.join(missing[:8])}" if missing else ""))
+
+
 def rebuild_coords(session, codes: set[str]) -> None:
     """Refresh data/airport_coords.csv (lat/lon per airport in the dataset)
     from the public OurAirports dump; keeps the existing file on failure."""
@@ -560,6 +609,12 @@ def main() -> int:
     except Exception as e:
         print(f"  timezone refresh failed: {e}")
 
+    print("Refreshing IANA time zones ...")
+    try:
+        rebuild_iana(session, set(codes))
+    except Exception as e:
+        print(f"  IANA zone refresh failed: {e}")
+
     print("Refreshing international departure times ...")
     try:
         rebuild_intl_times(g, ap_lookup)
@@ -633,6 +688,12 @@ def main() -> int:
         tz = {c: str(l) for c, l in zip(tt.code, tt.tz)
               if c in idx and isinstance(l, str) and l and l != "nan"}
 
+    iana: dict[str, str] = {}
+    if IANA_CSV.exists():
+        ii = pd.read_csv(IANA_CSV)
+        iana = {c: str(z) for c, z in zip(ii.code, ii.tz)
+                if c in idx and isinstance(z, str) and "/" in z}
+
     coords: dict[str, list[float]] = {}
     if COORDS_CSV.exists():
         cc = pd.read_csv(COORDS_CSV)
@@ -642,7 +703,8 @@ def main() -> int:
     import json
     payload = json.dumps({"airports": airports, "rows": rows, "coords": coords,
                           "days": days, "dm": dm, "times": times, "arrs": arrivals,
-                          "intlTimes": intl_times, "intlMeta": intl_meta, "tz": tz},
+                          "intlTimes": intl_times, "intlMeta": intl_meta, "tz": tz,
+                          "tzn": iana},
                          separators=(",", ":"))
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:
