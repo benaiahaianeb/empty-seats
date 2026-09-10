@@ -231,7 +231,7 @@
         <div id="originMenu" class="origin-menu" role="listbox"></div>
       </div>
     </div>
-    <div>
+    <div id="destCell">
       <label class="ctl-label" for="destSearch">Filter destinations</label>
       <input class="dest-search" id="destSearch" placeholder="Airport, city or country…">
     </div>
@@ -250,17 +250,27 @@
         <button class="chip" data-minf="1">Daily+</button>
         <button class="chip" data-minf="3">3×/day+</button>
       </div>
-      <div class="chip-group" id="vibeGroup" style="display:none">
-        <span class="chip-cap">Vibe</span>
-        <button class="chip on" data-vibe="all">Anywhere</button>
-        <button class="chip" data-vibe="sun">Sun &amp; beach</button>
-        <button class="chip" data-vibe="eur">Europe &amp; Med</button>
-        <button class="chip" data-vibe="apac">Asia &amp; Pacific</button>
-        <button class="chip" data-vibe="latam">Latin America</button>
-        <button class="chip" data-vibe="afr">Africa</button>
-        <button class="chip" data-vibe="mtn">Mountains &amp; parks</button>
-        <button class="chip" data-vibe="city">City breaks</button>
-        <button class="chip on" id="gemChip" title="Hide the mega-cities and hubs; show only smaller, less-obvious destinations">Off the beaten path</button>
+      <div class="chip-group" id="contGroup" style="display:none">
+        <span class="chip-cap">Continent</span>
+        <button class="chip on" data-cont="all">All</button>
+        <button class="chip" data-cont="na">North America</button>
+        <button class="chip" data-cont="eu">Europe</button>
+        <button class="chip" data-cont="as">Asia</button>
+        <button class="chip" data-cont="sa">South America</button>
+        <button class="chip" data-cont="af">Africa</button>
+        <button class="chip" data-cont="oc">Oceania</button>
+        <button class="chip" id="gemChip" title="Hide the busiest destinations in each continent">Off the beaten path</button>
+      </div>
+      <div class="chip-group" id="areaGroup" style="display:none">
+        <span class="chip-cap">Area</span>
+        <button class="chip on" data-area="all">All</button>
+        <button class="chip" data-area="ne">Northeast</button>
+        <button class="chip" data-area="mw">Midwest</button>
+        <button class="chip" data-area="so">South</button>
+        <button class="chip" data-area="sw">Southwest</button>
+        <button class="chip" data-area="we">West</button>
+        <button class="chip" data-area="ca">Canada</button>
+        <button class="chip" data-area="other">Everything else</button>
       </div>
       <div class="chip-group" id="altGroup" style="display:none">
         <span class="chip-cap">To</span>
@@ -425,54 +435,68 @@ for(const r of rows){ originSeats.set(r[0],(originSeats.get(r[0])||0)+r[5]); }
 const originList = [...byOrigin.keys()].sort((a,b)=>(originSeats.get(b)||0)-(originSeats.get(a)||0));
 
 // ---- trip finder config ----
-const VIBES = {
-  // sun & beach; g = hidden gem
-  CUN:["sun"],MBJ:["sun"],PUJ:["sun"],PLS:["sun"],NAS:["sun"],AUA:["sun"],SXM:["sun"],STT:["sun"],
-  STX:["sun","g"],SJU:["sun"],GCM:["sun"],BON:["sun","g"],SVD:["sun","g"],CUR:["sun","g"],
-  BZE:["sun","g"],LIR:["sun","g"],SJO:["sun","latam"],SJD:["sun"],PVR:["sun"],CZM:["sun","g"],
-  TQO:["sun","g"],POP:["sun","g"],STI:["latam","g"],SDQ:["latam","sun"],
-  HNL:["sun"],OGG:["sun"],KOA:["sun","g"],LIH:["sun","g"],
-  MIA:["sun","city"],FLL:["sun"],PBI:["sun"],RSW:["sun"],TPA:["sun"],MCO:["sun"],SRQ:["sun","g"],
-  EYW:["sun","g"],MYR:["sun"],HHH:["sun","g"],ILM:["sun","g"],VPS:["sun","g"],PNS:["sun","g"],
-  ECP:["sun","g"],PSP:["sun","g"],TUS:["sun","g"],PHX:["sun","city"],SAV:["city","g"],CHS:["city"],
-  // europe & med
-  LHR:["eur","city"],CDG:["eur","city"],NCE:["eur","g"],AMS:["eur","city"],FCO:["eur","city"],
-  MXP:["eur"],VCE:["eur"],NAP:["eur","g"],CTA:["eur","g"],PMO:["eur","g"],FLR:["eur","g"],
-  ATH:["eur"],DBV:["eur","g"],MAD:["eur","city"],BCN:["eur","city"],LIS:["eur","city"],
-  OPO:["eur","g"],DUB:["eur","city"],SNN:["eur","g"],EDI:["eur","g"],KEF:["eur","mtn","g"],
-  FRA:["eur"],MUC:["eur"],ZRH:["eur"],GVA:["eur","g"],BRU:["eur"],CPH:["eur","city"],ARN:["eur","g"],
-  PRG:["eur","city"],IST:["eur","city"],TLV:["eur"],
-  // asia & pacific
-  HND:["apac","city"],ICN:["apac","city"],PVG:["apac","city"],SYD:["apac","city"],
-  AKL:["apac","g"],BNE:["apac","g"],PPT:["apac","sun","g"],
-  // latin america
-  MEX:["latam","city"],GDL:["latam","g"],BOG:["latam"],MDE:["latam","g"],CTG:["latam","sun","g"],
-  LIM:["latam"],SCL:["latam","g"],EZE:["latam","city"],GRU:["latam","city"],GIG:["latam","sun"],
-  GUA:["latam","g"],SAL:["latam"],
-  // africa
-  ACC:["afr","g"],LOS:["afr"],DKR:["afr","g"],JNB:["afr"],CPT:["afr","g"],RAK:["afr","g"],
-  // mountains, parks & north woods
-  JAC:["mtn","g"],BZN:["mtn","g"],MSO:["mtn","g"],FCA:["mtn","g"],RAP:["mtn","g"],COD:["mtn","g"],
-  EGE:["mtn","g"],HDN:["mtn","g"],ASE:["mtn"],SUN:["mtn","g"],MTJ:["mtn","g"],GJT:["mtn","g"],
-  RNO:["mtn"],BOI:["mtn","g"],IDA:["mtn","g"],FAT:["mtn","g"],RDM:["mtn","g"],MFR:["mtn","g"],
-  TVC:["mtn","g"],PLN:["mtn","g"],MQT:["mtn","g"],CMX:["mtn","g"],ESC:["mtn","g"],RHI:["mtn","g"],
-  APN:["mtn","g"],IMT:["mtn","g"],BRD:["mtn","g"],BJI:["mtn","g"],HIB:["mtn","g"],INL:["mtn","g"],
-  DLH:["mtn","g"],ANC:["mtn","g"],FAI:["mtn","g"],JNU:["mtn","g"],SIT:["mtn","g"],KTN:["mtn","g"],
-  TYS:["mtn","g"],CHA:["mtn","g"],AVL:["city","mtn","g"],ROA:["mtn","g"],CHO:["city","g"],
-  BTV:["mtn","g"],BGR:["mtn","g"],PWM:["city","g"],ACK:["sun","g"],MVY:["sun","g"],
-  MRY:["sun","g"],SBA:["sun","g"],
-  // city breaks
-  JFK:["city"],LGA:["city"],BOS:["city"],SEA:["city"],SFO:["city"],LAX:["city"],SAN:["city","sun"],
-  LAS:["city"],MSY:["city"],BNA:["city"],AUS:["city"],DEN:["city","mtn"],ORD:["city"],DCA:["city"],
-  PDX:["city"],YVR:["city","mtn"],YYZ:["city"],YUL:["city","g"],ATL:["city"],MSP:["city"],
-  DTW:["city"],SLC:["city","mtn"]
+// Continent per country, for the trip finder's split. Every country in the
+// dataset is covered; a new one shows up as null and simply is not offered under
+// any continent, rather than being filed somewhere wrong.
+const CONT = {
+  // North America, taken to include Central America and the Caribbean
+  US:"na", CA:"na", MX:"na", BS:"na", DO:"na", JM:"na", CR:"na", HN:"na", AG:"na",
+  AW:"na", BM:"na", BB:"na", BQ:"na", BZ:"na", CW:"na", KY:"na", GD:"na", GT:"na",
+  CU:"na", PA:"na", SV:"na", KN:"na", VC:"na", SX:"na", TC:"na", LC:"na",
+  BR:"sa", CL:"sa", CO:"sa", AR:"sa", EC:"sa", PE:"sa", UY:"sa",
+  DE:"eu", IT:"eu", GB:"eu", PT:"eu", ES:"eu", FR:"eu", IE:"eu", CH:"eu", NL:"eu",
+  SE:"eu", GR:"eu", BE:"eu", DK:"eu", IS:"eu", CZ:"eu",
+  JP:"as", KR:"as", CN:"as", TW:"as", IL:"as",
+  MA:"af", ZA:"af", GH:"af", SN:"af", BW:"af", TG:"af", NG:"af", CV:"af",
+  AU:"oc", NZ:"oc", PF:"oc"
 };
+// North America splits again, since otherwise it is 299 destinations of which 243
+// are domestic. US state comes off the city label ("Boston, MA"), which every US
+// airport in the data carries. Puerto Rico and the Virgin Islands have no state
+// and fall through to "everything else", which is where a traveller looks for
+// them anyway.
+const US_REGION = {
+  CT:"ne", ME:"ne", MA:"ne", NH:"ne", RI:"ne", VT:"ne", NJ:"ne", NY:"ne", PA:"ne",
+  IL:"mw", IN:"mw", IA:"mw", KS:"mw", MI:"mw", MN:"mw", MO:"mw", NE:"mw", ND:"mw",
+  OH:"mw", SD:"mw", WI:"mw",
+  AL:"so", AR:"so", DC:"so", DE:"so", FL:"so", GA:"so", KY:"so", LA:"so", MD:"so",
+  MS:"so", NC:"so", SC:"so", TN:"so", VA:"so", WV:"so",
+  AZ:"sw", NM:"sw", OK:"sw", TX:"sw",
+  AK:"we", CA:"we", CO:"we", HI:"we", ID:"we", MT:"we", NV:"we", OR:"we", UT:"we",
+  WA:"we", WY:"we"
+};
+const contOf = i => CONT[A[i][2]] || null;
+function areaOf(i){
+  const a = A[i];
+  if(a[2]==="CA") return "ca";
+  if(a[2]!=="US") return "other";
+  const m = a[1].match(/,\s*([A-Z]{2})$/);
+  return (m && US_REGION[m[1]]) || "other";
+}
+// "Off the beaten path" = the busiest 15% of each continent by total seats over
+// the window. Data-driven so it stays current with no tags to maintain, and
+// ranked within continent so it means the same thing wherever you are browsing:
+// a single global ranking is dominated by domestic traffic and would leave every
+// European hub in place.
+const BUSY = (function(){
+  const seats = new Map();
+  for(const r of rows) seats.set(r[1], (seats.get(r[1])||0) + r[5]);
+  const byCont = {};
+  A.forEach((a,i)=>{ const c=CONT[a[2]]; if(c && seats.has(i)) (byCont[c]=byCont[c]||[]).push(i); });
+  const out = new Set();
+  for(const c in byCont){
+    const list = byCont[c].sort((x,y)=>seats.get(y)-seats.get(x));
+    const n = Math.max(1, Math.round(list.length*0.15));
+    for(let i=0;i<n;i++) out.add(list[i]);
+  }
+  return out;
+})();
 const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 
 // ---- state ----
 let state = {
   origin:null, mode:"month", month:null, week:0,
-  geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", vibe:"all", gemsOnly:true,
+  geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", cont:"all", naArea:"all", gemsOnly:false,
   destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
 };
 {
@@ -1175,12 +1199,14 @@ function computeTrips(){
     if(m) viaFrom[xc]=m;
   }
   const out = [];
-  for(const code in VIBES){
-    const tags = VIBES[code];
-    if(state.vibe!=="all" && !tags.includes(state.vibe)) continue;
-    if(state.gemsOnly && !tags.includes("g")) continue;
-    const d = CODE_IDX.get(code);
-    if(d==null || d===oIdx) continue;
+  for(let d=0; d<A.length; d++){
+    if(d===oIdx) continue;
+    const c = contOf(d);
+    if(c===null) continue;
+    if(state.cont!=="all" && c!==state.cont) continue;
+    if(state.cont==="na" && state.naArea!=="all" && areaOf(d)!==state.naArea) continue;
+    if(state.gemsOnly && BUSY.has(d)) continue;
+    const code = A[d][0];
     const options = [];
     const direct = metricFromSeries(oSer.get(d));
     if(direct && direct.fpd>=MINF && !isDeadRoute(direct.fpd,oCode,code,dmi))
@@ -1204,7 +1230,7 @@ function computeTrips(){
     const dOpt = usable.find(o=>o.direct);
     if(dOpt && dOpt.bn >= best.bn-5) best = dOpt; // prefer nonstop when close
     const ap = A[d];
-    out.push({d, code, city:ap[1], tags, legs:best.legs, bn:best.bn,
+    out.push({d, code, city:ap[1], legs:best.legs, bn:best.bn,
       sumOpen:best.legs.reduce((s,l)=>s+l.m.open,0),
       worstLf:Math.max(...best.legs.map(l=>l.m.lf))});
   }
@@ -1220,14 +1246,20 @@ function renderTrips(){
   const whenTxt = whenText();
   const sum = document.getElementById("summary");
   if(list.length){
-    sum.innerHTML = "<strong>Trip ideas</strong> from "+oa[0]+" · "+whenTxt+(isWeek?' <span class="estbadge">Estimate</span>':"")+
-      " · ranked by tightest leg";
+    const CONT_NAME={all:"everywhere",na:"North America",eu:"Europe",as:"Asia",sa:"South America",af:"Africa",oc:"Oceania"};
+    const AREA_NAME={all:"",ne:"Northeast",mw:"Midwest",so:"South",sw:"Southwest",we:"West",ca:"Canada",other:"everything else"};
+    let where = CONT_NAME[state.cont]||"everywhere";
+    if(state.cont==="na" && state.naArea!=="all") where = AREA_NAME[state.naArea];
+    sum.innerHTML = "<strong>"+list.length+" trip ideas</strong> from "+oa[0]+" · "+esc(where)
+      +" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"")
+      +(state.gemsOnly? " · off the beaten path" : "")
+      +" · ranked by tightest leg";
   } else sum.textContent="";
   if(!list.length){
     cont.innerHTML='<div class="empty">No trips match.</div>';
     return;
   }
-  const dmi = currentDaysIdx();
+  const dmi = schedIdx(); // as on the other tabs, shown schedules follow the toggle
   let html="";
   list.forEach((r,i)=>{
     const col = lfText(r.worstLf);
@@ -1502,8 +1534,9 @@ function setView(v){
   const board = v==="board";
   document.getElementById("geoGroup").style.display = board? "":"none";
   document.getElementById("freqGroup").style.display = board? "":"none";
-  document.getElementById("destSearch").style.display = board? "":"none";
-  document.getElementById("vibeGroup").style.display = v==="trip"? "":"none";
+  document.getElementById("destCell").style.display = board? "":"none";
+  document.getElementById("contGroup").style.display = v==="trip"? "":"none";
+  syncAreaGroup();
   document.getElementById("altGroup").style.display = v==="alt"? "":"none";
   document.getElementById("originLabel").textContent = v==="alt"? "Your location" : "Departing from";
   document.querySelector(".thead").style.display = board? "":"none";
@@ -1512,15 +1545,26 @@ function setView(v){
 document.getElementById("tabBoard").onclick=()=>setView("board");
 document.getElementById("tabTrip").onclick=()=>setView("trip");
 document.getElementById("tabAlt").onclick=()=>setView("alt");
+function syncAreaGroup(){
+  const g=document.getElementById("areaGroup");
+  g.style.display = (state.view==="trip" && state.cont==="na")? "":"none";
+}
 document.getElementById("gemChip").addEventListener("click",e=>{
   state.gemsOnly=!state.gemsOnly;
   e.currentTarget.classList.toggle("on",state.gemsOnly);
   renderBoard();
 });
-document.getElementById("vibeGroup").addEventListener("click",e=>{
-  const b=e.target.closest("[data-vibe]"); if(!b) return;
-  state.vibe=b.dataset.vibe;
-  document.querySelectorAll("#vibeGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
+document.getElementById("contGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-cont]"); if(!b) return;
+  state.cont=b.dataset.cont;
+  document.querySelectorAll("#contGroup .chip[data-cont]").forEach(c=>c.classList.toggle("on",c===b));
+  syncAreaGroup();
+  renderBoard();
+});
+document.getElementById("areaGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-area]"); if(!b) return;
+  state.naArea=b.dataset.area;
+  document.querySelectorAll("#areaGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
   renderBoard();
 });
 
