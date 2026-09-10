@@ -200,7 +200,7 @@
   .empty{padding:32px 20px;text-align:center;color:var(--text-secondary);font-size:14px}
   .empty b{color:var(--text);font-weight:500}
 
-  .triprow{width:100%;display:grid;grid-template-columns:240px 1fr 130px;align-items:center;
+  .triprow{width:100%;display:grid;grid-template-columns:240px 1fr 130px;align-items:center;cursor:pointer;
     padding:12px 16px;border-bottom:1px solid var(--divider);background:var(--surface);color:var(--text);text-align:left}
   .legs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-right:10px}
   .leg{font-variant-numeric:tabular-nums;font-size:12px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:3px 7px;white-space:nowrap}
@@ -496,7 +496,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 // ---- state ----
 let state = {
   origin:null, mode:"month", month:null, week:0,
-  geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", cont:"all", naArea:"all", gemsOnly:false,
+  geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", cont:"all", naArea:"all", gemsOnly:false, tripOpen:null,
   destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
 };
 {
@@ -1268,14 +1268,21 @@ function renderTrips(){
       return (li? '<span class="legarrow">›</span>':'')+
         '<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
     }).join("");
-    html += '<div class="triprow">'
+    const isOpen = state.tripOpen===r.code;
+    html += '<div class="triprow" data-tkey="'+r.code+'" role="button" tabindex="0" aria-expanded="'+isOpen+'">'
       +'<span class="trdest"><span class="dcode">'+r.code+'</span><span class="dcity" style="display:block">'+esc(r.city)
         +(r.legs.length===1?'<span class="tag">Nonstop</span>':"")+"</span></span>"
       +'<span class="legs">'+legHtml+"</span>"
       +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+"<small>min open/leg</small></span>"
-      +"</div>";
+      +"</div>"
+      +'<div class="altdetail'+(isOpen?" open":"")+'">'+(isOpen? altDetailHTML(r, dmi):"")+"</div>";
   });
   cont.innerHTML=html;
+  cont.querySelectorAll(".triprow").forEach(el=>{
+    const toggle=()=>{ state.tripOpen = state.tripOpen===el.dataset.tkey? null : el.dataset.tkey; renderBoard(); };
+    el.addEventListener("click", toggle);
+    el.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } });
+  });
 }
 
 function passesGeoFreq(d, m){
@@ -1556,14 +1563,14 @@ document.getElementById("gemChip").addEventListener("click",e=>{
 });
 document.getElementById("contGroup").addEventListener("click",e=>{
   const b=e.target.closest("[data-cont]"); if(!b) return;
-  state.cont=b.dataset.cont;
+  state.cont=b.dataset.cont; state.tripOpen=null;
   document.querySelectorAll("#contGroup .chip[data-cont]").forEach(c=>c.classList.toggle("on",c===b));
   syncAreaGroup();
   renderBoard();
 });
 document.getElementById("areaGroup").addEventListener("click",e=>{
   const b=e.target.closest("[data-area]"); if(!b) return;
-  state.naArea=b.dataset.area;
+  state.naArea=b.dataset.area; state.tripOpen=null;
   document.querySelectorAll("#areaGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
   renderBoard();
 });
