@@ -537,8 +537,7 @@ function freqLabel(fpd){
 const DAYS = DATA.days || {};
 const TIMES = DATA.times || {};
 const ARRS = DATA.arrs || {};   // scheduled arrivals, index-aligned with TIMES
-const TZ = DATA.tz || {};       // airport -> zone abbreviation
-const tzOf = c => TZ[c]? " "+TZ[c] : "";
+// tzOf is defined with the other timezone code, below.
 const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
 const IMETA = DATA.intlMeta || {label:"", sampled:[]};
 const ISAMPLED = new Set(IMETA.sampled);
@@ -738,7 +737,6 @@ function metricFromSeries(arr){
 
 // ---- route alternatives: nearby-airport nonstop options ----
 const COORDS = DATA.coords || {};
-const ALT_MI = 55; // ~1 hour drive, straight-line
 // manual same-area exceptions beyond the radius (kept symmetric)
 const ALT_EXTRA = {BOS:["BDL"], PVD:["BDL"], BDL:["BOS","PVD"]};
 function distMi(a, b){
@@ -772,7 +770,7 @@ function syncRadChips(){
   set("radToGroup","radt",radTo());
 }
 function nearbyCodes(code, miles){
-  const lim = miles==null? ALT_MI : miles;
+  const lim = miles;
   const out=[{code, mi:0}];
   for(const a of A){
     if(a[0]===code) continue;
@@ -782,14 +780,6 @@ function nearbyCodes(code, miles){
   if(lim>0) for(const c of (ALT_EXTRA[code]||[])){
     if(!out.some(x=>x.code===c) && CODE_IDX.has(c))
       out.push({code:c, mi:distMi(code, c)||0});
-  }
-  return out;
-}
-function nearbyWithin(code, miles){
-  const out=[];
-  for(const a of A){
-    const mi = a[0]===code? 0 : distMi(code, a[0]);
-    if(mi!=null && mi<=miles) out.push({code:a[0], mi});
   }
   return out;
 }
@@ -803,6 +793,31 @@ function nearbyWithin(code, miles){
 // block by around an hour each way. So every number built on it says "est.",
 // and the duration - which needs no timezone at all - leads.
 const BLK_BASE = 45.4, BLK_PER_MI = 0.1267;
+// The (July, January) offset pair names a US zone, so Phoenix reads MST,
+// Honolulu HST, San Juan AST, Adak HAT. This replaces a table the pipeline used
+// to derive by solving median block times across the route graph; the IANA zone
+// already carries it, and the two agreed on all 234 domestic airports. Pairs
+// outside this table - every foreign airport - get no suffix, as before.
+const TZ_LABEL = {
+  "-240,-300":"ET", "-300,-360":"CT", "-360,-420":"MT", "-420,-420":"MST",
+  "-420,-480":"PT", "-480,-540":"AKT", "-600,-600":"HST", "-540,-600":"HAT",
+  "-240,-240":"AST", "600,600":"ChST"
+};
+const _tzCache = new Map();
+function tzAbbr(code){
+  if(_tzCache.has(code)) return _tzCache.get(code);
+  // US airports only. These are US zone names, and an offset pair is not unique
+  // across the world - Brisbane keeps the same +10 all year, exactly like Guam,
+  // and would otherwise read ChST. Foreign airports show times with no suffix.
+  const i=CODE_IDX.get(code);
+  const j=(i!=null && A[i][2]==="US")? utcOffMin(code,"2025-07") : null;
+  const w=(j==null)? null : utcOffMin(code,"2025-01");
+  const v=(j==null||w==null)? "" : (TZ_LABEL[j+","+w]||"");
+  _tzCache.set(code, v);
+  return v;
+}
+const tzOf = c => tzAbbr(c)? " "+tzAbbr(c) : "";
+
 function estBlockMin(o, d){
   const mi = distMi(o, d);
   return mi==null? null : Math.round(BLK_BASE + BLK_PER_MI*mi);
@@ -911,20 +926,10 @@ function opsOnDay(o, d, dmi, dow){
   if(!mask || mask===127) return true;
   return !!(mask>>dow & 1);
 }
-function computeAlts(){
-  if(state.altDest==null) return null;
-  const O=A[state.origin][0], D=A[state.altDest][0];
-  // dmi = the viewed month, which decides whether a route still exists at all.
-  // sdi = the schedule month, which decides what days and times it runs.
-  const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
-  const MINF=0.4; // ~3x/week per connecting leg, as in the trip finder
-  const maxStops=state.altStops;
-  const froms=nearbyCodes(O, radFrom()), tos=nearbyCodes(D, radTo());
-  // An airport you could simply drive to is not a connection. Flying into an
-  // airport inside your own departure radius means backtracking past it (RST ->
-  // MSP when you are at MSP); connecting inside the destination radius means
-  // flying past a landing point you already accept.
-  const fromSet=new Set(froms.map(x=>x.code)), toSet=new Set(tos.map(x=>x.code));
+// Shared by both connection searches. The trip finder has no day control, so it
+// passes dow -1 and opsOnDay waves every day through; it also has no radius, so
+// it passes empty sets and viaOK reduces to the international gate.
+function connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF){
   // Foreign connecting points sit behind the toggle. Their onward legs carry no
   // departure times at all in this data, so a connection through one can never
   // be checked for same-day feasibility - it is offered, not verified.
@@ -948,7 +953,6 @@ function computeAlts(){
     }
     return sum <= dd*MAX_CIRCUITY;
   }
-
   // Connections are not restricted to Delta hubs: any airport with enough
   // service on both legs can carry one (MSP -> MSN -> BOS). destSeries and the
   // per-leg verdict are both cached for the render, which is what keeps the
@@ -963,9 +967,31 @@ function computeAlts(){
     const f=A[fi][0], t=A[ti][0];
     let m=metricFromSeries(serOf(fi).get(ti));
     if(m && (m.fpd<MINF || isDeadRoute(m.fpd,f,t,dmi) || !opsOnDay(f,t,sdi,dow))) m=null;
-    legCache.set(k,m||null);
+    legCache.set(k, m||null);
     return m||null;
   }
+  return {viaOK, circuityOK, serOf, legMetric};
+}
+
+function computeAlts(){
+  if(state.altDest==null) return null;
+  const O=A[state.origin][0], D=A[state.altDest][0];
+  // dmi = the viewed month, which decides whether a route still exists at all.
+  // sdi = the schedule month, which decides what days and times it runs.
+  const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
+  const MINF=0.4; // ~3x/week per connecting leg, as in the trip finder
+  const maxStops=state.altStops;
+  const froms=nearbyCodes(O, radFrom()), tos=nearbyCodes(D, radTo());
+  // An airport you could simply drive to is not a connection. Flying into an
+  // airport inside your own departure radius means backtracking past it (RST ->
+  // MSP when you are at MSP); connecting inside the destination radius means
+  // flying past a landing point you already accept.
+  // An airport you could simply drive to is not a connection. Flying into an
+  // airport inside your own departure radius means backtracking past it (RST ->
+  // MSP when you are at MSP); connecting inside the destination radius means
+  // flying past a landing point you already accept.
+  const fromSet=new Set(froms.map(x=>x.code)), toSet=new Set(tos.map(x=>x.code));
+  const {viaOK, circuityOK, serOf, legMetric} = connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF);
 
   // last leg into each destination, from anywhere; independent of the origin
   const toDestByD={};
@@ -1063,7 +1089,8 @@ function legTimesHTML(f, t, dmi){
   if(!mask && ITIMES[key] && ITIMES[key].length>1) mask=ITIMES[key][0];
   const dl=(mask>0 && mask<127)? daysLabel(mask) : null;
   let note=dl? dl : "";
-  if(b && TZ[f]) note += (note? " · ":"") + (b.arr && TZ[t] && TZ[t]!==TZ[f]? TZ[f]+" → "+TZ[t] : TZ[f]);
+  const zf=tzAbbr(f), zt=tzAbbr(t);
+  if(b && zf) note += (note? " · ":"") + (b.arr && zt && zt!==zf? zf+" → "+zt : zf);
   let times;
   if(!b || !b.dep.length) times='<span class="na">No schedule data</span>';
   else if(b.arr) times=b.dep.map((d,i)=>fmtT(d)+" → "+fmtT(b.arr[i])).join(" · ");
@@ -1161,40 +1188,17 @@ function computeTrips(){
   const MINF = 0.4; // ~3x/week per leg minimum for realistic standby
   // dmi decides whether a route still exists; sdi is the schedule being shown
   const dmi = currentDaysIdx(), sdi = schedIdx();
-  // Same rules as the Alternatives tab: any airport with enough service on both
-  // legs can carry a connection, not just the nine hubs, but it has to lie
-  // roughly on the way and it cannot be the origin itself.
-  const usOnly = !state.altIntl;
-  const isUS = c => { const i=CODE_IDX.get(c); return i!=null && A[i][2]==="US"; };
-  const MAX_CIRCUITY = state.altIntl? 4 : 2.5;
-  function circuityOK(codes){
-    const dd=distMi(codes[0], codes[codes.length-1]);
-    if(dd==null || dd<=0) return true;
-    let sum=0;
-    for(let i=0;i+1<codes.length;i++){
-      const leg=distMi(codes[i], codes[i+1]);
-      if(leg==null) return true;
-      sum+=leg;
-    }
-    return sum <= dd*MAX_CIRCUITY;
-  }
-  const serCache=new Map();
-  const serOf=i=>{ if(!serCache.has(i)) serCache.set(i,destSeries(i)); return serCache.get(i); };
-  const legCache=new Map();
-  function legMetric(fi, ti){
-    const k=fi*100000+ti;
-    if(legCache.has(k)) return legCache.get(k);
-    const f=A[fi][0], t=A[ti][0];
-    let m=metricFromSeries(serOf(fi).get(ti));
-    if(m && (m.fpd<MINF || isDeadRoute(m.fpd,f,t,dmi))) m=null;
-    legCache.set(k, m||null);
-    return m||null;
-  }
+  // Same rules as the Alternatives tab, minus the day and radius controls it
+  // does not have: dow -1 accepts every day, and the empty sets leave viaOK as
+  // just the international gate.
+  const {viaOK, circuityOK, serOf, legMetric} =
+    connectionHelpers(dmi, sdi, -1, new Set(), new Set(), MINF);
+
   // first leg out of the origin, shared by every destination
   const viaFrom={};
   for(const xi of oSer.keys()){
     const xc=A[xi][0];
-    if(xc===oCode || (usOnly && !isUS(xc))) continue;
+    if(xc===oCode || !viaOK(xc)) continue;
     const m=legMetric(oIdx, xi);
     if(m) viaFrom[xc]=m;
   }
