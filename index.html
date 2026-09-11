@@ -92,6 +92,16 @@
   .chip.on{background:var(--primary-pastel);border-color:var(--primary);color:var(--chip-on-text)}
   .chip-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .chip-cap{font-size:12px;color:var(--text-secondary);margin-right:2px}
+  #altGroup{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 14px;align-items:center;width:100%}
+  #altGroup>.chip-cap{text-align:right;white-space:nowrap}
+  @media(max-width:480px){#altGroup{grid-template-columns:1fr;gap:4px 0}
+    #altGroup>.chip-cap{text-align:left;margin-top:6px}}
+  .howto{margin:0 0 14px;font-size:13px;color:var(--text-secondary)}
+  .howto summary{cursor:pointer;color:var(--primary);font-weight:500;font-size:12px;list-style:none;width:max-content;padding:2px 0}
+  .howto summary::-webkit-details-marker{display:none}
+  .howto[open] summary{margin-bottom:8px}
+  .howto h4{font-size:13px;font-weight:600;color:var(--text);margin:12px 0 3px}
+  .howto p{margin:0 0 6px;line-height:1.45;max-width:72ch}
   .optwrap{position:relative}
   .optbtn{font:inherit;font-size:13px;font-weight:500;padding:5px 12px;border-radius:var(--radius);
     border:1px solid var(--divider);background:var(--surface);color:var(--text);cursor:pointer;
@@ -193,6 +203,28 @@
     <div class="datastamp">Scheduled service · <span id="stampRange"></span><br><button id="themeBtn" class="themebtn">Dark mode</button></div>
   </header>
 
+  <details class="howto">
+    <summary>How to use</summary>
+    <h4>From and To</h4>
+    <p>Type an airport or city in either box. A blank box means anywhere: BOS to blank lists every nonstop out of Boston, and blank to LHR lists every airport with a London flight. To blank a box, delete its contents and click elsewhere.</p>
+    <h4>Radius</h4>
+    <p>Each side has its own radius. 0 is that airport alone. 50 to 500 miles adds airports within driving distance. Anywhere ignores distance. Boston, Providence and Hartford are paired by hand, so those default to 50 and the pairing appears.</p>
+    <h4>Stops</h4>
+    <p>Nonstop only, or a connection through one or two airports. A connection must work the same day and head roughly the right way; a Minneapolis to Boston trip will not route through Seoul. With either side set to anywhere, only nonstops are shown, since starting at the connecting airport beats connecting through it.</p>
+    <h4>Day, Frequency, Sort</h4>
+    <p>Day keeps flights that run on that weekday. Frequency hides routes that run less often than the selected chip. Sort by open seats puts the emptiest first; sort by arrival puts the earliest landing first.</p>
+    <h4>Open seats</h4>
+    <p>Seats minus revenue passengers, averaged per flight for the month being viewed. Other non-revs are not counted, so the true number is lower. The bar shows cabin fill.</p>
+    <h4>Options</h4>
+    <p>Month selects which calendar month the numbers come from; Week interpolates between months. Latest uses the most recent occurrence of that month; 3-year average blends every occurrence. Newest schedule shows days and times from the most recent month in the data; Seasonal shows the viewed month's own, which can be a year old. Operators removes Endeavor or SkyWest flying. Include international connections allows a foreign airport as a connecting point.</p>
+    <h4>Tap a row</h4>
+    <p>Opens the full schedule for each leg, departure to arrival. International legs have no arrival data, so an estimated flight time and an estimated arrival are shown, both marked est.</p>
+    <h4>Trip finder</h4>
+    <p>Everything reachable from one airport, grouped by continent. Off the beaten path hides the busiest 15% of destinations in each continent.</p>
+    <h4>Where the numbers come from</h4>
+    <p>US Department of Transportation reports: seats and passengers per route per month, and departure and arrival times for domestic flights. International times come from airport departure boards. The reports run about three months behind, so a route that started last month is not yet included. The header shows the months covered.</p>
+  </details>
+
   <div class="controls">
     <div>
       <label class="ctl-label" for="originInput">From</label>
@@ -239,6 +271,14 @@
           <button class="chip" data-stops="0">Nonstop</button>
           <button class="chip on" data-stops="1">Up to 1</button>
           <button class="chip" data-stops="2">Up to 2</button>
+        </div>
+        <span class="chip-cap">Frequency</span>
+        <div class="chip-group" id="freqGroup">
+          <button class="chip" data-minf="0">Any</button>
+          <button class="chip on" data-minf="0.12">1×/week+</button>
+          <button class="chip" data-minf="0.5">½ daily+</button>
+          <button class="chip" data-minf="1">Daily+</button>
+          <button class="chip" data-minf="3">3×/day+</button>
         </div>
         <span class="chip-cap">Sort</span>
         <div class="chip-group" id="sortGroup">
@@ -444,7 +484,7 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 // ---- state ----
 let state = {
   origin:null, mode:"month", month:null, week:0,
-  cars:new Set([0,1,2]), view:"alt", cont:"all", naArea:"all", gemsOnly:false, tripOpen:null,
+  cars:new Set([0,1,2]), minFpd:0.12, view:"alt", cont:"all", naArea:"all", gemsOnly:false, tripOpen:null,
   altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
 };
 {
@@ -924,7 +964,9 @@ function computeAlts(){
   // dmi = the viewed month, which decides whether a route still exists at all.
   // sdi = the schedule month, which decides what days and times it runs.
   const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
-  const MINF=0.4; // ~3x/week per connecting leg, as in the trip finder
+  // nonstops must clear the Frequency chip; connecting legs must clear it and
+  // ~3x/week besides, as in the trip finder
+  const MINF=Math.max(0.4, state.minFpd);
   const maxStops=state.altStops;
   const froms=nearbyCodes(O, radFrom()), tos=nearbyCodes(D, radTo());
   // An airport you could simply drive to is not a connection. Flying into an
@@ -971,7 +1013,7 @@ function computeAlts(){
       if(di==null) continue;
       const options=[];
       const direct=metricFromSeries(ser.get(di));
-      if(direct && !isDeadRoute(direct.fpd, no.code, nd.code, dmi)
+      if(direct && direct.fpd>=state.minFpd && !isDeadRoute(direct.fpd, no.code, nd.code, dmi)
           && opsOnDay(no.code, nd.code, sdi, dow))
         options.push({legs:[{f:no.code,t:nd.code,m:direct}], bn:direct.open, direct:true});
       const toDest=toDestByD[nd.code]||{};
@@ -1328,6 +1370,12 @@ picker("destInput","destMenu",destList, ()=>state.altDest, v=>{ state.altDest=v;
     const b=e.target.closest("[data-dow]"); if(!b) return;
     state.altDow=+b.dataset.dow;
     dg.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("freqGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-minf]"); if(!b) return;
+    state.minFpd=+b.dataset.minf; state.altOpen=null;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
     renderBoard();
   });
   document.getElementById("radFromGroup").addEventListener("click",e=>{
