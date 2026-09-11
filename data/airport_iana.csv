@@ -4,6 +4,7 @@ ABI,America/Chicago
 ABQ,America/Denver
 ABR,America/Chicago
 ABY,America/New_York
+ACA,America/Mexico_City
 ACC,Africa/Accra
 ACK,America/New_York
 ACT,America/Chicago
@@ -17,6 +18,7 @@ AFW,America/Chicago
 AGA,Africa/Casablanca
 AGP,Europe/Madrid
 AGS,America/New_York
+AGU,America/Mexico_City
 AKL,Pacific/Auckland
 AKN,America/Anchorage
 ALB,America/New_York
@@ -28,6 +30,7 @@ AMS,Europe/Amsterdam
 ANC,America/Anchorage
 ANF,America/Santiago
 ANU,America/Antigua
+APC,America/Los_Angeles
 APN,America/New_York
 APW,Pacific/Apia
 ARN,Europe/Stockholm
@@ -41,6 +44,7 @@ AUA,America/Aruba
 AUS,America/Chicago
 AVL,America/New_York
 AVP,America/New_York
+AXA,America/Anguilla
 AXM,America/Bogota
 AZA,America/Phoenix
 AZO,America/New_York
@@ -61,12 +65,14 @@ BHM,America/Chicago
 BHX,Europe/London
 BIF,America/Denver
 BIL,America/Denver
+BIM,America/Nassau
 BIO,Europe/Madrid
 BIS,America/Chicago
 BJI,America/Chicago
 BJX,America/Mexico_City
 BLI,America/Los_Angeles
 BLV,America/Chicago
+BMG,America/New_York
 BMI,America/Chicago
 BNA,America/Chicago
 BNE,Australia/Brisbane
@@ -97,6 +103,7 @@ CAE,America/New_York
 CAK,America/New_York
 CAP,America/Port-au-Prince
 CBR,Australia/Sydney
+CCS,America/Caracas
 CDC,America/Denver
 CDG,Europe/Paris
 CDV,America/Anchorage
@@ -137,6 +144,7 @@ CTS,Asia/Tokyo
 CUL,America/Mazatlan
 CUN,America/Cancun
 CUR,America/Curacao
+CUU,America/Mazatlan
 CVG,America/New_York
 CWA,America/Chicago
 CYS,America/Denver
@@ -157,6 +165,7 @@ DIK,America/Denver
 DLG,America/Anchorage
 DLH,America/Chicago
 DOM,America/Dominica
+DOV,America/New_York
 DRO,America/Denver
 DSM,America/Chicago
 DSS,Africa/Dakar
@@ -170,7 +179,9 @@ EAU,America/Chicago
 ECP,America/Chicago
 EDI,Europe/London
 EGE,America/Denver
+EIS,America/Tortola
 EKO,America/Los_Angeles
+ELH,America/Nassau
 ELM,America/New_York
 ELP,America/Denver
 ENA,America/Anchorage
@@ -215,6 +226,7 @@ GEO,America/Guyana
 GFK,America/Chicago
 GGG,America/Chicago
 GGT,America/Nassau
+GHB,America/Nassau
 GIG,America/Sao_Paulo
 GJT,America/Denver
 GLA,Europe/London
@@ -239,6 +251,7 @@ GUF,America/Chicago
 GUM,Pacific/Guam
 GVA,Europe/Paris
 GYE,America/Guayaquil
+GYR,America/Phoenix
 HAK,Asia/Shanghai
 HAV,America/Havana
 HDN,America/Denver
@@ -271,6 +284,8 @@ ILM,America/New_York
 IMT,America/Chicago
 IND,America/New_York
 INL,America/Chicago
+ISM,America/New_York
+ISO,America/New_York
 ISP,America/New_York
 ITH,America/New_York
 ITO,Pacific/Honolulu
@@ -320,6 +335,7 @@ LNK,America/Chicago
 LOS,Africa/Lagos
 LRD,America/Chicago
 LRM,America/Santo_Domingo
+LRU,America/Denver
 LSE,America/Chicago
 LTO,America/Mazatlan
 LUX,Europe/Luxembourg
@@ -351,6 +367,7 @@ MFR,America/Los_Angeles
 MGA,America/Managua
 MGM,America/Chicago
 MGW,America/New_York
+MHH,America/Nassau
 MHK,America/Chicago
 MHT,America/New_York
 MIA,America/New_York
@@ -389,6 +406,7 @@ NRT,Asia/Tokyo
 OAJ,America/New_York
 OAK,America/Los_Angeles
 OAX,America/Mexico_City
+OCJ,America/Jamaica
 OGD,America/Denver
 OGG,Pacific/Honolulu
 OKC,America/Chicago
@@ -407,6 +425,7 @@ OTH,America/Los_Angeles
 OTZ,America/Anchorage
 PAE,America/Los_Angeles
 PAP,America/Port-au-Prince
+PBC,America/Mexico_City
 PBG,America/New_York
 PBI,America/New_York
 PBM,America/Paramaribo
@@ -454,6 +473,7 @@ PVG,Asia/Shanghai
 PVR,America/Mexico_City
 PVU,America/Denver
 PWM,America/New_York
+PXM,America/Mexico_City
 QRO,America/Mexico_City
 RAK,Africa/Casablanca
 RAP,America/Denver
@@ -513,6 +533,7 @@ SKB,America/St_Kitts
 SLC,America/Denver
 SLN,America/Chicago
 SLP,America/Mexico_City
+SLW,America/Mexico_City
 SMA,Atlantic/Azores
 SMF,America/Los_Angeles
 SMX,America/Los_Angeles
@@ -549,7 +570,9 @@ TLV,Asia/Jerusalem
 TOL,America/New_York
 TPA,America/New_York
 TPE,Asia/Taipei
+TPQ,America/Mazatlan
 TQO,America/Cancun
+TRC,America/Mexico_City
 TRI,America/New_York
 TTN,America/New_York
 TUL,America/Chicago
@@ -575,12 +598,14 @@ VVI,America/La_Paz
 WRG,America/Anchorage
 WYS,America/Denver
 XNA,America/Chicago
+XSC,America/Grand_Turk
 XWA,America/Chicago
 YAK,America/Anchorage
 YAP,Pacific/Truk
 YEG,America/Edmonton
 YFB,America/Toronto
 YHZ,America/Halifax
+YIP,America/New_York
 YJT,America/St_Johns
 YKM,America/Los_Angeles
 YOW,America/Toronto
@@ -592,9 +617,11 @@ YUM,America/Phoenix
 YVR,America/Vancouver
 YWG,America/Winnipeg
 YYC,America/Edmonton
+YYJ,America/Vancouver
 YYR,America/Halifax
 YYT,America/St_Johns
 YYZ,America/Toronto
+ZCL,America/Mexico_City
 ZIH,America/Mexico_City
 ZLO,America/Mexico_City
 ZRH,Europe/Zurich
