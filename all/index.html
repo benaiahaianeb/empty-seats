@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Empty Seats</title>
+<style>
+  :root{
+    --primary:#0066CC; --primary-dark:#0052A3; --primary-pastel:#EAF2FB;
+    --success:#4CAF50; --success-text:#2E7D32;
+    --warning:#FFC107; --warning-text:#B26A00; --warning-pastel:#FFF8E1;
+    --error:#F44336;   --error-text:#C62828;
+    --bg:#FAFAFA; --surface:#FFFFFF; --text:#212121; --text-secondary:#616161;
+    --divider:#E0E0E0; --radius:4px;
+    --hover:#F5F5F5; --track:#EEEEEE;
+    --on-primary:#FFFFFF; --chip-on-text:#0D47A1;
+    --warn-chip-bg:#FFF8E1; --warn-chip-text:#7B5800;
+    --shadow-2:0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    /* data font: system stack with tabular numerals, not monospace */
+    --mono:var(--font);
+  }
+  html[data-theme="dark"]{
+    --primary:#69B1FF; --primary-dark:#8CC4FF; --primary-pastel:#16324F;
+    --success-text:#81C784; --warning-text:#FFB74D; --error-text:#E57373;
+    --error:#EF5350;
+    --bg:#121212; --surface:#1E1E1E; --text:#E6E6E6; --text-secondary:#A0A0A0;
+    --divider:#333333; --hover:#2A2A2A; --track:#333333;
+    --on-primary:#0A2540; --chip-on-text:#A6CFFF;
+    --warn-chip-bg:#2E2410; --warn-chip-text:#FFD54F;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--bg)}
+  body{font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg);min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 16px 64px}
+
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  .brand{font-size:24px;font-weight:500}
+  .brand em{font-style:normal;color:var(--primary)}
+  .sub{color:var(--text-secondary);font-size:13px;margin-top:2px}
+  .datastamp{font-size:12px;color:var(--text-secondary);text-align:right;line-height:1.5}
+  .brand .airline{font-size:14px;font-weight:400;color:var(--text-secondary);margin-left:8px}
+  #airlineDlg{margin:auto;border:1px solid var(--divider);border-radius:var(--radius);background:var(--surface);color:var(--text);
+    padding:20px 22px;max-width:360px;font-size:14px}
+  #airlineDlg::backdrop{background:rgba(0,0,0,.45)}
+  #airlineDlg h3{margin:0 0 8px;font-size:15px;font-weight:600}
+  #airlineDlg p{margin:0 0 12px;color:var(--text-secondary);line-height:1.4}
+  #airlineDlg select,.optrow select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--divider);
+    border-radius:var(--radius);background:var(--surface);color:var(--text);margin-right:10px}
+  .themebtn{font:inherit;font-size:12px;font-weight:500;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0}
+
+  .controls{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:16px;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  @media(max-width:760px){.controls{grid-template-columns:1fr}}
+  .ctl-label{font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:flex;align-items:center;
+    gap:10px;flex-wrap:wrap;row-gap:8px;min-width:0}
+  .origin-box{position:relative}
+  .origin-input{width:100%;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);
+    font-size:14px;padding:8px 8px;outline:none}
+  .origin-input:focus{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+  .origin-menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--divider);
+    border-radius:var(--radius);max-height:260px;overflow:auto;display:none;box-shadow:var(--shadow-2)}
+  .origin-menu.open{display:block}
+  .origin-opt{padding:8px 12px;cursor:pointer;font-size:14px;display:flex;gap:10px;align-items:baseline}
+  .origin-opt:hover{background:var(--hover)}
+  .origin-opt .code{color:var(--primary);font-weight:500;width:44px}
+  .origin-opt .city{color:var(--text-secondary)}
+
+  .modeswitch{display:inline-flex;flex:0 0 auto;border:1px solid var(--divider);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+  .modeswitch button{font:inherit;font-size:13px;font-weight:500;background:transparent;border:none;color:var(--text-secondary);
+    padding:5px 12px;cursor:pointer;white-space:nowrap;transition:background-color 150ms ease}
+  .modeswitch button+button{border-left:1px solid var(--divider)}
+  .modeswitch button.on{background:var(--primary);color:var(--on-primary)}
+
+  .months{display:flex;gap:4px;flex-wrap:wrap}
+  .mo{font:inherit;font-size:13px;font-weight:500;padding:6px 0;width:52px;text-align:center;
+    background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text-secondary);cursor:pointer;
+    transition:background-color 150ms ease}
+  .mo:hover{background:var(--hover);color:var(--text)}
+  .mo.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  .mo .yr{display:block;font-size:10px;opacity:.8}
+  .mo:focus-visible,.origin-input:focus-visible,.chip:focus-visible,button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+
+  .weekpick{display:none}
+  .weekpick.on{display:block}
+  .monthpick.off{display:none}
+  .weekrow{display:flex;align-items:center;gap:10px}
+  .wbtn{font:inherit;font-size:14px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);
+    width:32px;height:32px;cursor:pointer}
+  .wbtn:hover{background:var(--hover)}
+  input[type=range]{flex:1;accent-color:var(--primary);height:32px}
+  .weekout{margin-top:6px;font-size:13px;color:var(--text-secondary)}
+  .weekout b{color:var(--text);font-weight:500}
+  .estbadge{font-size:11px;font-weight:500;color:var(--warn-chip-text);background:var(--warn-chip-bg);border-radius:var(--radius);padding:1px 6px;margin-left:6px}
+
+  .filters{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--divider);padding-top:12px}
+  .chip{font:inherit;font-size:13px;font-weight:500;padding:5px 10px;border-radius:var(--radius);border:1px solid var(--divider);
+    background:var(--surface);color:var(--text-secondary);cursor:pointer;transition:background-color 150ms ease}
+  .chip:hover{background:var(--hover)}
+  .chip.on{background:var(--primary-pastel);border-color:var(--primary);color:var(--chip-on-text)}
+  .chip-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip-cap{font-size:12px;color:var(--text-secondary);margin-right:2px}
+  #altGroup{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 14px;align-items:center;width:100%}
+  #altGroup>.chip-cap{text-align:right;white-space:nowrap}
+  @media(max-width:480px){#altGroup{grid-template-columns:1fr;gap:4px 0}
+    #altGroup>.chip-cap{text-align:left;margin-top:6px}}
+  .howto{margin:0 0 14px;font-size:13px;color:var(--text-secondary)}
+  .howto summary{cursor:pointer;color:var(--primary);font-weight:500;font-size:12px;list-style:none;width:max-content;padding:2px 0}
+  .howto summary::-webkit-details-marker{display:none}
+  .howto[open] summary{margin-bottom:8px}
+  .howto h4{font-size:13px;font-weight:600;color:var(--text);margin:12px 0 3px}
+  .howto p{margin:0 0 6px;line-height:1.45;max-width:72ch}
+  .optwrap{position:relative}
+  .optbtn{font:inherit;font-size:13px;font-weight:500;padding:5px 12px;border-radius:var(--radius);
+    border:1px solid var(--divider);background:var(--surface);color:var(--text);cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;transition:background-color 150ms ease,color 150ms ease}
+  .optbtn:hover{background:var(--hover)}
+  .optbtn.on{background:var(--primary-pastel);border-color:var(--primary);color:var(--chip-on-text)}
+  .optbtn .caret{font-size:9px;opacity:0.7}
+  .optpanel{display:none;position:absolute;z-index:40;right:0;top:calc(100% + 6px);
+    width:min(600px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--divider);
+    border-radius:var(--radius);box-shadow:var(--shadow-2);padding:14px}
+  .optpanel.open{display:block}
+  .optrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;row-gap:8px}
+  .optrow+.optrow{margin-top:12px;padding-top:12px;border-top:1px solid var(--divider)}
+  /* on a phone it anchors to the bottom of the screen instead: fixed to the
+     static position ran off the bottom edge, and a fixed element cannot be
+     scrolled into view, so the last controls were unreachable */
+  @media(max-width:640px){.optpanel{position:fixed;left:16px;right:16px;width:auto;
+    top:auto;bottom:16px;max-height:75vh;overflow:auto}}
+  .spacer{flex:1}
+
+  .summary{margin:20px 2px 8px;font-size:16px;color:var(--text-secondary)}
+  .summary strong{color:var(--text);font-weight:500}
+
+  .viewtabs{display:flex;border-bottom:1px solid var(--divider);margin-top:20px}
+  .vtab{padding:12px 16px;font:inherit;font-weight:500;font-size:14px;color:var(--text-secondary);
+    border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;transition:color 150ms ease}
+  .vtab:hover{color:var(--text)}
+  .vtab.on{color:var(--primary);border-bottom-color:var(--primary)}
+
+  .board{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);overflow:hidden;margin-top:8px}
+
+  .rowbtn{width:100%;display:grid;grid-template-columns:92px 1fr 200px 210px 110px;align-items:center;
+    padding:10px 16px;border:none;border-bottom:1px solid var(--divider);background:var(--surface);color:var(--text);cursor:pointer;text-align:left;
+    font:inherit;transition:background-color 150ms ease}
+  .rowbtn:hover{background:var(--hover)}
+  .dcode{font-family:var(--font);font-variant-numeric:tabular-nums;font-weight:500;font-size:16px;color:var(--primary)}
+  .dcity{font-size:14px;color:var(--text);padding-right:10px;line-height:1.3}
+  .tag{font-size:11px;color:var(--text-secondary);border:1px solid var(--divider);
+    border-radius:var(--radius);padding:1px 5px;margin-left:6px;vertical-align:1px;white-space:nowrap;background:var(--surface)}
+  .sched{font-family:var(--font);font-variant-numeric:tabular-nums;font-size:13px;color:var(--text);padding-right:14px;line-height:1.4}
+  .sched b{font-weight:500}
+  .sched.irr b{font-weight:400;color:var(--text-secondary)}
+  .sched small{display:block;font-size:12px;color:var(--text-secondary);margin-top:1px}
+  .arrline{font-size:11px;color:var(--text-secondary)}
+  .legs .arrline{flex-basis:100%;margin-top:2px}
+  .altcode{font-size:13px !important}
+  .altrow{cursor:pointer}
+  .altdetail{border-bottom:1px solid var(--divider);background:var(--bg);padding:12px 16px 14px;display:none}
+  .altdetail.open{display:block}
+  .legrow+.legrow{margin-top:10px}
+  .legrow b{font-weight:500}
+  .legrow .dim{color:var(--text-secondary);font-size:12px;margin-left:8px}
+  .legtimes{font-variant-numeric:tabular-nums;font-size:13px;margin-top:3px;line-height:1.6}
+  .legtimes .na{color:var(--text-secondary)}
+  .altrow.orig{box-shadow:inset 3px 0 0 var(--primary)}
+  .altrow .legs{grid-column:span 2;padding-right:10px}
+
+  .gauge{display:flex;align-items:center;gap:10px;padding:0 14px}
+  .cabin{flex:1;height:10px;border-radius:2px;background:var(--track);border:1px solid var(--divider);position:relative;overflow:hidden}
+  .fill{position:absolute;inset:0;right:auto;border-radius:1px}
+  .lfnum{font-variant-numeric:tabular-nums;font-size:13px;width:52px;text-align:right}
+
+  .opennum{font-variant-numeric:tabular-nums;font-weight:600;font-size:16px;text-align:right}
+  .opennum small{display:block;font-family:var(--font);font-weight:400;font-size:11px;color:var(--text-secondary)}
+  .opennum .mcap{display:none}
+
+  @media(max-width:860px){
+    .opennum .mcap{display:block}
+    .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "sched sched sched" "gauge gauge gauge";row-gap:8px}
+    .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
+    .sched{grid-area:sched;padding:0}
+    .altrow .legs{grid-area:sched}
+    .gauge{grid-area:gauge;padding:0}
+  }
+
+  .empty{padding:32px 20px;text-align:center;color:var(--text-secondary);font-size:14px}
+  .empty b{color:var(--text);font-weight:500}
+
+  .triprow{width:100%;display:grid;grid-template-columns:240px 1fr 130px;align-items:center;cursor:pointer;
+    padding:12px 16px;border-bottom:1px solid var(--divider);background:var(--surface);color:var(--text);text-align:left}
+  .legs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-right:10px}
+  .leg{font-variant-numeric:tabular-nums;font-size:12px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:3px 7px;white-space:nowrap}
+  .leg b{font-weight:600}
+  .leg small{color:var(--text-secondary);font-size:11px}
+  .legarrow{color:var(--text-secondary);font-size:12px}
+  @media(max-width:860px){
+    .triprow{grid-template-columns:1fr 110px;grid-template-areas:"dest open" "legs legs";row-gap:8px}
+    .trdest{grid-area:dest}.legs{grid-area:legs}.triprow .opennum{grid-area:open}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="brand">Empty <em>Seats</em> <span class="airline" id="airlineName"></span></div>
+      <div class="sub">Average open seats excluding other non-revs.</div>
+    </div>
+    <div class="datastamp">Scheduled service · <span id="stampRange"></span><br><button id="themeBtn" class="themebtn">Dark mode</button></div>
+  </header>
+
+  <details class="howto">
+    <summary>How to use</summary>
+    <h4>From and To</h4>
+    <p>Type an airport or city in either box. A blank box means anywhere: BOS to blank lists every nonstop out of Boston, and blank to LHR lists every airport with a London flight. To blank a box, delete its contents and click elsewhere.</p>
+    <h4>Radius</h4>
+    <p>Each side has its own radius. 0 is that airport alone. 50 to 500 miles adds airports within driving distance. Anywhere ignores distance. Boston, Providence and Hartford are paired by hand, so those default to 50 and the pairing appears.</p>
+    <h4>Stops</h4>
+    <p>Nonstop only, or a connection through one or two airports. A connection must work the same day and head roughly the right way; a Minneapolis to Boston trip will not route through Seoul. With either side set to anywhere, only nonstops are shown, since starting at the connecting airport beats connecting through it.</p>
+    <h4>Day, Frequency, Sort</h4>
+    <p>Day keeps flights that run on that weekday. Frequency hides routes that run less often than the selected chip. Sort by open seats puts the emptiest first; sort by arrival puts the earliest landing first.</p>
+    <h4>Open seats</h4>
+    <p>Seats minus revenue passengers, averaged per flight for the month being viewed. Other non-revs are not counted, so the true number is lower. The bar shows cabin fill.</p>
+    <h4>Options</h4>
+    <p>Month selects which calendar month the numbers come from; Week interpolates between months. Latest uses the most recent occurrence of that month; 3-year average blends every occurrence. Newest schedule shows days and times from the most recent month in the data; Seasonal shows the viewed month's own, which can be a year old. Airline switches the whole dataset to another carrier; the choice is remembered on this device. Include international connections allows a foreign airport as a connecting point.</p>
+    <h4>Tap a row</h4>
+    <p>Opens the full schedule for each leg, departure to arrival. International legs have no arrival data, so an estimated flight time and an estimated arrival are shown, both marked est.</p>
+    <h4>Trip finder</h4>
+    <p>Everything reachable from one airport, grouped by continent. Off the beaten path hides the busiest 15% of destinations in each continent.</p>
+    <h4>Where the numbers come from</h4>
+    <p>US Department of Transportation reports: seats and passengers per route per month, and departure and arrival times for domestic flights. Regional flying (SkyWest, Republic and the like) is split between the airlines that sold it, by each airline's share of that route in the on-time data. International times come from airport departure boards, for Delta only so far. The reports run about three months behind, so a route that started last month is not yet included. The header shows the months covered.</p>
+  </details>
+
+  <div class="controls">
+    <div>
+      <label class="ctl-label" for="originInput">From</label>
+      <div class="origin-box">
+        <input id="originInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Any airport">
+        <div id="originMenu" class="origin-menu" role="listbox"></div>
+      </div>
+    </div>
+    <div>
+      <label class="ctl-label" for="destInput">To</label>
+      <div class="origin-box">
+        <input id="destInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Any airport">
+        <div id="destMenu" class="origin-menu" role="listbox"></div>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="chip-group" id="contGroup" style="display:none">
+        <span class="chip-cap">Continent</span>
+        <button class="chip on" data-cont="all">All</button>
+        <button class="chip" data-cont="na">North America</button>
+        <button class="chip" data-cont="eu">Europe</button>
+        <button class="chip" data-cont="as">Asia</button>
+        <button class="chip" data-cont="sa">South America</button>
+        <button class="chip" data-cont="af">Africa</button>
+        <button class="chip" data-cont="oc">Oceania</button>
+        <button class="chip" id="gemChip" title="Hide the busiest destinations in each continent">Off the beaten path</button>
+      </div>
+      <div class="chip-group" id="areaGroup" style="display:none">
+        <span class="chip-cap">Area</span>
+        <button class="chip on" data-area="all">All</button>
+        <button class="chip" data-area="ne">Northeast</button>
+        <button class="chip" data-area="mw">Midwest</button>
+        <button class="chip" data-area="so">South</button>
+        <button class="chip" data-area="sw">Southwest</button>
+        <button class="chip" data-area="we">West</button>
+        <button class="chip" data-area="ca">Canada</button>
+        <button class="chip" data-area="other">Everything else</button>
+      </div>
+      <div class="chip-group" id="altGroup" style="display:none">
+        <span class="chip-cap">Day</span>
+        <div class="chip-group" id="dowGroup"></div>
+        <span class="chip-cap">Stops</span>
+        <div class="chip-group" id="stopsGroup">
+          <button class="chip" data-stops="0">Nonstop</button>
+          <button class="chip on" data-stops="1">Up to 1</button>
+          <button class="chip" data-stops="2">Up to 2</button>
+        </div>
+        <span class="chip-cap">Frequency</span>
+        <div class="chip-group" id="freqGroup">
+          <button class="chip" data-minf="0">Any</button>
+          <button class="chip on" data-minf="0.12">1×/week+</button>
+          <button class="chip" data-minf="0.5">½ daily+</button>
+          <button class="chip" data-minf="1">Daily+</button>
+          <button class="chip" data-minf="3">3×/day+</button>
+        </div>
+        <span class="chip-cap">Sort</span>
+        <div class="chip-group" id="sortGroup">
+          <button class="chip on" data-asort="open">Open seats</button>
+          <button class="chip" data-asort="arr">Arrival</button>
+        </div>
+        <span class="chip-cap">Departure radius</span>
+        <div class="chip-group" id="radFromGroup">
+          <button class="chip" data-radf="0">0</button>
+          <button class="chip" data-radf="50">50</button>
+          <button class="chip" data-radf="100">100</button>
+          <button class="chip" data-radf="250">250</button>
+          <button class="chip" data-radf="500">500 mi</button>
+          <button class="chip" data-radf="Infinity">Anywhere</button>
+        </div>
+        <span class="chip-cap">Destination radius</span>
+        <div class="chip-group" id="radToGroup">
+          <button class="chip" data-radt="0">0</button>
+          <button class="chip" data-radt="50">50</button>
+          <button class="chip" data-radt="100">100</button>
+          <button class="chip" data-radt="250">250</button>
+          <button class="chip" data-radt="500">500 mi</button>
+          <button class="chip" data-radt="Infinity">Anywhere</button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="optwrap">
+        <button class="optbtn" id="optBtn" aria-expanded="false" aria-controls="optPanel">Options<span class="caret">▼</span></button>
+        <div class="optpanel" id="optPanel" role="group" aria-label="Options">
+          <div class="optrow">
+            <span class="chip-cap">Travel dates</span>
+            <span class="modeswitch">
+              <button id="modeMonth" class="on">Month</button>
+              <button id="modeWeek">Week</button>
+            </span>
+          </div>
+          <div class="optrow">
+            <div class="monthpick" id="monthPick"><div class="months" id="months"></div></div>
+            <div class="weekpick" id="weekPick">
+              <div class="weekrow">
+                <button class="wbtn" id="wPrev" aria-label="Previous week">‹</button>
+                <input type="range" id="weekSlider" min="0" max="1" value="0" aria-label="Select week">
+                <button class="wbtn" id="wNext" aria-label="Next week">›</button>
+              </div>
+              <div class="weekout" id="weekOut"></div>
+            </div>
+          </div>
+          <div class="optrow">
+            <span class="chip-cap">Open seats</span>
+            <span class="modeswitch" id="spanSwitch">
+              <button id="spanLatest" class="on">Latest</button>
+              <button id="spanAvg">3-year average</button>
+            </span>
+            <span class="chip-cap">Schedule</span>
+            <span class="modeswitch">
+              <button id="schedNewest" class="on">Newest</button>
+              <button id="schedSeasonal">Seasonal</button>
+            </span>
+          </div>
+          <div class="optrow">
+            <span class="chip-cap">Airline</span>
+            <select id="airlineSel" aria-label="Airline"></select>
+            <button class="chip" id="intlChip">Include international connections</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="viewtabs">
+    <button class="vtab on" id="tabAlt">Flight finder</button>
+    <button class="vtab" id="tabTrip">Trip finder</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="board">
+    <div id="rows"></div>
+  </div>
+
+</div>
+
+<dialog id="airlineDlg">
+  <form method="dialog">
+    <h3>Which airline?</h3>
+    <p>Flights and empty seats are shown for one airline at a time. Pick the one whose flights are listable; change it any time under Options.</p>
+    <select id="airlineFirst" required></select>
+    <button class="chip on" type="submit">Continue</button>
+  </form>
+</dialog>
+<script type="module">
+// One airline's dataset at a time. The choice is saved in the browser and can
+// be changed under Options; nothing from another airline is ever loaded, so
+// nothing from another airline can be shown.
+const KEY = "esa-airline";
+const CARRIER_LIST = await (await fetch("../data/carriers.json", {cache: "no-cache"})).json();
+let saved = null;
+try { saved = localStorage.getItem(KEY); } catch(e) {}
+if (!CARRIER_LIST.some(c => c.code === saved)) saved = null;
+const fill = sel => { sel.innerHTML = CARRIER_LIST.map(c => '<option value="' + c.code + '">' + c.name + " (" + c.code + ")</option>").join(""); };
+if (!saved) {
+  const dlg = document.getElementById("airlineDlg"), sel = document.getElementById("airlineFirst");
+  fill(sel);
+  saved = await new Promise(res => {
+    dlg.addEventListener("close", () => res(sel.value));
+    dlg.showModal();
+  });
+  try { localStorage.setItem(KEY, saved); } catch(e) {}
+}
+const DATA = await (await fetch("../data/" + saved + ".json", {cache: "no-cache"})).json();
+{
+  const sel = document.getElementById("airlineSel");
+  fill(sel); sel.value = saved;
+  sel.addEventListener("change", () => { try { localStorage.setItem(KEY, sel.value); } catch(e) {} location.reload(); });
+  document.getElementById("airlineName").textContent = DATA.carrier.name;
+}
+
+// theme: saved choice wins; otherwise dark on mobile, light on desktop
+(function(){
+  let saved = null;
+  try { saved = localStorage.getItem("esa-theme"); } catch(e){}
+  let mobile = false;
+  try { mobile = window.matchMedia("(max-width: 760px)").matches; } catch(e){}
+  const theme = (saved==="dark"||saved==="light")? saved : (mobile? "dark" : "light");
+  document.documentElement.dataset.theme = theme;
+})();
+
+const MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function daysIn(y,m){ return new Date(y,m,0).getDate(); }
+
+// ---- index data ----
+const A = DATA.airports;               // [code, city, country]
+const rows = DATA.rows;                // [oIdx, dIdx, year, month, dep, seats, pax, carrier]
+const byOrigin = new Map();
+const byDest = new Map();
+for(const r of rows){
+  if(!byOrigin.has(r[0])) byOrigin.set(r[0],[]);
+  byOrigin.get(r[0]).push(r);
+  if(!byDest.has(r[1])) byDest.set(r[1],[]);
+  byDest.get(r[1]).push(r);
+}
+// chronological month points across the data range
+const pointKey = (y,m)=> y*100+m;
+const pointSet = new Set(rows.map(r=>pointKey(r[2],r[3])));
+const POINTS = [...pointSet].sort((a,b)=>a-b).map(k=>({y:Math.floor(k/100), m:k%100}));
+POINTS.forEach((p,i)=>{ p.i=i; p.mid = new Date(p.y, p.m-1, 15).getTime(); p.days = daysIn(p.y,p.m); });
+const PIDX = new Map(POINTS.map(p=>[pointKey(p.y,p.m), p]));
+const yearsByMonth = Array.from({length:13},()=>new Set());
+for(const p of POINTS) yearsByMonth[p.m].add(p.y);
+const latestYearFor = m => Math.max(...yearsByMonth[m]);
+
+// week list: Mondays whose midpoint (Thu) falls inside [first,last] month midpoints
+const WEEKS = (()=>{
+  const first = POINTS[0].mid, last = POINTS[POINTS.length-1].mid;
+  const out=[];
+  let d = new Date(first); // find Monday on/before first mid
+  d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  for(;;){
+    const mid = d.getTime() + 3.5*864e5;
+    if(mid > last) break;
+    if(mid >= first) out.push(new Date(d));
+    d = new Date(d.getTime() + 7*864e5);
+  }
+  return out;
+})();
+
+// origin list sorted by total seats
+const originSeats = new Map();
+for(const r of rows){ originSeats.set(r[0],(originSeats.get(r[0])||0)+r[5]); }
+const originList = [...byOrigin.keys()].sort((a,b)=>(originSeats.get(b)||0)-(originSeats.get(a)||0));
+
+// ---- trip finder config ----
+// Continent per country, for the trip finder's split. Every country in the
+// dataset is covered; a new one shows up as null and simply is not offered under
+// any continent, rather than being filed somewhere wrong.
+const CONT = {
+  // North America, taken to include Central America and the Caribbean
+  US:"na", CA:"na", MX:"na", BS:"na", DO:"na", JM:"na", CR:"na", HN:"na", AG:"na",
+  AW:"na", BM:"na", BB:"na", BQ:"na", BZ:"na", CW:"na", KY:"na", GD:"na", GT:"na",
+  CU:"na", PA:"na", SV:"na", KN:"na", VC:"na", SX:"na", TC:"na", LC:"na",
+  BR:"sa", CL:"sa", CO:"sa", AR:"sa", EC:"sa", PE:"sa", UY:"sa",
+  DE:"eu", IT:"eu", GB:"eu", PT:"eu", ES:"eu", FR:"eu", IE:"eu", CH:"eu", NL:"eu",
+  SE:"eu", GR:"eu", BE:"eu", DK:"eu", IS:"eu", CZ:"eu",
+  JP:"as", KR:"as", CN:"as", TW:"as", IL:"as",
+  MA:"af", ZA:"af", GH:"af", SN:"af", BW:"af", TG:"af", NG:"af", CV:"af",
+  AU:"oc", NZ:"oc", PF:"oc"
+};
+// North America splits again, since otherwise it is 299 destinations of which 243
+// are domestic. US state comes off the city label ("Boston, MA"), which every US
+// airport in the data carries. Puerto Rico and the Virgin Islands have no state
+// and fall through to "everything else", which is where a traveller looks for
+// them anyway.
+const US_REGION = {
+  CT:"ne", ME:"ne", MA:"ne", NH:"ne", RI:"ne", VT:"ne", NJ:"ne", NY:"ne", PA:"ne",
+  IL:"mw", IN:"mw", IA:"mw", KS:"mw", MI:"mw", MN:"mw", MO:"mw", NE:"mw", ND:"mw",
+  OH:"mw", SD:"mw", WI:"mw",
+  AL:"so", AR:"so", DC:"so", DE:"so", FL:"so", GA:"so", KY:"so", LA:"so", MD:"so",
+  MS:"so", NC:"so", SC:"so", TN:"so", VA:"so", WV:"so",
+  AZ:"sw", NM:"sw", OK:"sw", TX:"sw",
+  AK:"we", CA:"we", CO:"we", HI:"we", ID:"we", MT:"we", NV:"we", OR:"we", UT:"we",
+  WA:"we", WY:"we"
+};
+const contOf = i => CONT[A[i][2]] || null;
+function areaOf(i){
+  const a = A[i];
+  if(a[2]==="CA") return "ca";
+  if(a[2]!=="US") return "other";
+  const m = a[1].match(/,\s*([A-Z]{2})$/);
+  return (m && US_REGION[m[1]]) || "other";
+}
+// "Off the beaten path" = the busiest 15% of each continent by total seats over
+// the window. Data-driven so it stays current with no tags to maintain, and
+// ranked within continent so it means the same thing wherever you are browsing:
+// a single global ranking is dominated by domestic traffic and would leave every
+// European hub in place.
+const BUSY = (function(){
+  const seats = new Map();
+  for(const r of rows) seats.set(r[1], (seats.get(r[1])||0) + r[5]);
+  const byCont = {};
+  A.forEach((a,i)=>{ const c=CONT[a[2]]; if(c && seats.has(i)) (byCont[c]=byCont[c]||[]).push(i); });
+  const out = new Set();
+  for(const c in byCont){
+    const list = byCont[c].sort((x,y)=>seats.get(y)-seats.get(x));
+    const n = Math.max(1, Math.round(list.length*0.15));
+    for(let i=0;i<n;i++) out.add(list[i]);
+  }
+  return out;
+})();
+const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
+
+// ---- state ----
+let state = {
+  origin:null, mode:"month", month:null, week:0,
+  cars:new Set([0,1,2]), minFpd:0.12, view:"alt", cont:"all", naArea:"all", gemsOnly:false, tripOpen:null,
+  altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
+};
+{
+  const defo = A.findIndex(a=>a[0]==="BOS");
+  state.origin = (defo>=0 && byOrigin.has(defo)) ? defo : originList[0];
+  const m = new Date().getMonth()+1;
+  state.month = yearsByMonth[m].size? m : POINTS[POINTS.length-1].m;
+  // default week: nearest to today, clamped
+  const t = Date.now();
+  let best=0,bd=Infinity;
+  WEEKS.forEach((w,i)=>{ const d=Math.abs(w.getTime()+3.5*864e5-t); if(d<bd){bd=d;best=i;} });
+  state.week = best;
+}
+
+// ---- helpers ----
+function lfColor(lf){ // bar fills
+  if(lf<=65) return "var(--success)";
+  if(lf<=85) return "var(--warning)";
+  return "var(--error)";
+}
+function lfText(lf){ // text on white, AA contrast
+  if(lf<=65) return "var(--success-text)";
+  if(lf<=85) return "var(--warning-text)";
+  return "var(--error-text)";
+}
+const esc = s => s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtDate = d => d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+function freqLabel(fpd){
+  if(fpd>=1.5) return Math.round(fpd)+"×/day";
+  if(fpd>=0.9) return "Daily";
+  const wk = fpd*7;
+  if(wk>=6.5) return "Daily";
+  if(wk>=0.9) return Math.round(wk)+"×/week";
+  return "<1×/week";
+}
+// operating days for sub-daily routes, per window month (domestic routes only).
+// DATA.days: "ORG-DST" -> array of 7-bit masks (bit 0 = Monday) aligned to DATA.dm.
+const DAYS = DATA.days || {};
+const TIMES = DATA.times || {};
+const ARRS = DATA.arrs || {};   // scheduled arrivals, index-aligned with TIMES
+// tzOf is defined with the other timezone code, below.
+const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
+const IMETA = DATA.intlMeta || {label:"", sampled:[]};
+const ISAMPLED = new Set(IMETA.sampled);
+const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
+const fmtT = t => String(Math.floor(t/100)).padStart(2,"0")+":"+String(t%100).padStart(2,"0");
+function schedHTML(fpd, o, d, dmi, extra, tzc){
+  const key = o+"-"+d;
+  const mk = (dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
+  const tl = (dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
+  // "Irregular" describes the flying in the month being viewed, not the month the
+  // schedule is read from: a summer route has no January schedule but is not a
+  // charter. So this test always asks the viewed month, even when the days and
+  // times beside it come from a newer one.
+  const vdi = currentDaysIdx();
+  const vmk = (vdi>=0 && DAYS[key])? DAYS[key][vdi] : 0;
+  const vtl = (vdi>=0 && TIMES[key])? TIMES[key][vdi] : null;
+  if(fpd<0.9 && !vmk && !(vtl && vtl.length)){
+    // domestic route absent from scheduled-service records: charter/diversion ops
+    const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
+    if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US")
+      return '<span class="sched irr"><b>Irregular</b></span>';
+  }
+  // schedule data shown must never contradict the label: day patterns drive
+  // weekly counts, visible time banks drive per-day counts
+  let mask = 0, banks = null;
+  if(tl && tl.length){ mask = mk; banks = tl; }
+  else if(ITIMES[key] && ITIMES[key].length>1){
+    mask = ITIMES[key][0];
+    banks = ITIMES[key].slice(1);
+  } else { mask = mk; }
+  const dl = (mask>0 && mask<127)? daysLabel(mask) : null;
+  const parts = [];
+  let label = null;
+  if(banks && banks.length>=2){
+    label = banks.length+"×/day";
+    if(dl) parts.push(dl);
+  } else if(dl){
+    if(dl.startsWith("Except ")) label = "Daily except "+dl.slice(7);
+    else { label = dayCount(mask)+"×/week"; parts.push(dl); }
+  } else if(banks && banks.length===1 && fpd>=0.9){
+    label = "Daily";
+  }
+  if(banks && banks.length) parts.push(banks.map(fmtT).join(" · ")+(tzc? tzOf(tzc):""));
+  return '<span class="sched"><b>'+(label || freqLabel(fpd))+'</b>'
+    +(parts.length? '<small>'+parts.join(" — ")+"</small>" : "")
+    +(extra? '<small class="arrline">'+extra+"</small>" : "")+"</span>";
+}
+const DOW = ["MO","TU","WE","TH","FR","SA","SU"];
+const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function dayCount(mask){
+  let n=0;
+  for(let i=0;i<7;i++) if(mask>>i&1) n++;
+  return n;
+}
+function daysLabel(mask){
+  const on=[], off=[];
+  for(let i=0;i<7;i++) (mask>>i&1? on:off).push(DOW[i]);
+  if(!on.length || on.length===7) return null;
+  return on.length>=5? "Except "+off.join("·") : on.join("·");
+}
+function currentDaysIdx(){
+  let p;
+  if(state.mode==="month"){ p = PIDX.get(pointKey(latestYearFor(state.month),state.month)); }
+  else {
+    const t=WEEKS[state.week].getTime()+3.5*864e5;
+    let i2=POINTS.findIndex(q=>q.mid>=t); if(i2<0)i2=POINTS.length-1;
+    const i1=Math.max(0,POINTS[i2].mid===t?i2:i2-1);
+    const f=POINTS[i2].mid===POINTS[i1].mid?0:(t-POINTS[i1].mid)/(POINTS[i2].mid-POINTS[i1].mid);
+    p = f<0.5? POINTS[i1]:POINTS[i2];
+  }
+  if(!p) return -1;
+  const k = p.y+"-"+String(p.m).padStart(2,"0");
+  return DM_IDX.has(k)? DM_IDX.get(k) : -1;
+}
+// Which month's days and times to display. Loads are seasonal so they always
+// come from the viewed month, but a schedule is only useful if you can still
+// book it, and the viewed month can be up to 11 months old. "newest" reads the
+// freshest month in the window; "seasonal" keeps the viewed month's own
+// schedule, which is right for the season but stale. Either way the summary
+// line names the month it came from, so neither reads as live data.
+const NEWEST_DMI = (DATA.dm||[]).length-1;
+function schedIdx(){ return state.sched==="newest"? NEWEST_DMI : currentDaysIdx(); }
+function schedNote(){
+  const t=(DATA.dm||[])[schedIdx()];
+  return t? " · schedule from "+MONTH_FULL[+t.slice(5,7)-1]+" "+t.slice(0,4) : "";
+}
+
+// planning tool: hide flights that can no longer be taken.
+// domestic month with no scheduled-service record = charter/diversion ops;
+// intl route absent from the sampled current+seasonal schedule = discontinued.
+function isDeadRoute(fpd, o, d, dmi){
+  const key = o+"-"+d;
+  const oi = CODE_IDX.get(o), di = CODE_IDX.get(d);
+  if(oi==null || di==null) return false;
+  const dom = A[oi][2]==="US" && A[di][2]==="US";
+  if(dom){
+    if(fpd>=0.9 || dmi<0) return false;
+    const mk = DAYS[key]? DAYS[key][dmi] : 0;
+    const tl = TIMES[key]? TIMES[key][dmi] : null;
+    return !mk && !(tl && tl.length);
+  }
+  return ISAMPLED.has(o) && !(ITIMES[key] && ITIMES[key].length>1);
+}
+function freqTxt(fpd, o, d, dmi){
+  if(fpd<0.9 && dmi>=0){
+    const arr = DAYS[o+"-"+d];
+    const mk = arr? arr[dmi] : 0;
+    if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) return dl; }
+    if(!mk){
+      // domestic route with no scheduled-service record that month:
+      // charter/diversion-type flying with no fixed days
+      const oi=CODE_IDX.get(o), di=CODE_IDX.get(d);
+      if(oi!=null && di!=null && A[oi][2]==="US" && A[di][2]==="US") return "Irregular";
+    }
+  }
+  return freqLabel(fpd);
+}
+
+// aggregate one origin's rows into dest -> pointIndex -> {dep,seats,pax}
+function destSeries(originIdx){
+  const list = byOrigin.get(originIdx)||[];
+  const out = new Map();
+  for(const r of list){
+    if(r[7]!==0 && !state.cars.has(r[7])) continue;
+    const p = PIDX.get(pointKey(r[2],r[3]));
+    if(!p) continue;
+    if(!out.has(r[1])) out.set(r[1], new Array(POINTS.length));
+    const arr = out.get(r[1]);
+    if(!arr[p.i]) arr[p.i]={dep:0,seats:0,pax:0};
+    const a=arr[p.i]; a.dep+=r[4]; a.seats+=r[5]; a.pax+=r[6];
+  }
+  return out;
+}
+// aggregate one destination's rows into origin -> pointIndex -> {dep,seats,pax}.
+// the mirror of destSeries: it answers "who flies into here", which is what a
+// connection search needs for its last leg.
+function originSeries(destIdx){
+  const list = byDest.get(destIdx)||[];
+  const out = new Map();
+  for(const r of list){
+    if(r[7]!==0 && !state.cars.has(r[7])) continue;
+    const p = PIDX.get(pointKey(r[2],r[3]));
+    if(!p) continue;
+    if(!out.has(r[0])) out.set(r[0], new Array(POINTS.length));
+    const arr = out.get(r[0]);
+    if(!arr[p.i]) arr[p.i]={dep:0,seats:0,pax:0};
+    const a=arr[p.i]; a.dep+=r[4]; a.seats+=r[5]; a.pax+=r[6];
+  }
+  return out;
+}
+function metricsAt(a, p){ // a={dep,seats,pax}, p=point
+  return {fpd:a.dep/p.days, spf:a.seats/a.dep, lf:a.pax/a.seats*100, open:(a.seats-a.pax)/a.dep};
+}
+// flight-weighted average across all occurrences of calendar month m in the window
+function avgMetric(arr, m){
+  let dep=0, seats=0, pax=0, days=0;
+  for(const p of POINTS){
+    if(p.m!==m) continue;
+    const a=arr[p.i];
+    if(!a || a.dep<1 || a.seats<1) continue;
+    dep+=a.dep; seats+=a.seats; pax+=a.pax; days+=p.days;
+  }
+  if(dep<1 || seats<1) return null;
+  return {fpd:dep/days, spf:seats/dep, lf:pax/seats*100, open:(seats-pax)/dep};
+}
+function whenText(){
+  if(state.mode==="week") return "week of "+fmtDate(WEEKS[state.week]);
+  return MONTH_FULL[state.month-1]+(state.span==="avg"? " · 3-year average" : " "+latestYearFor(state.month));
+}
+function metricFromSeries(arr){
+  if(!arr) return null;
+  if(state.mode==="month"){
+    if(state.span==="avg") return avgMetric(arr, state.month);
+    const p = PIDX.get(pointKey(latestYearFor(state.month),state.month));
+    if(!p) return null;
+    const a = arr[p.i];
+    if(!a || a.dep<1 || a.seats<1) return null;
+    return metricsAt(a,p);
+  }
+  const t = WEEKS[state.week].getTime()+3.5*864e5;
+  let i2 = POINTS.findIndex(p=>p.mid>=t); if(i2<0) i2=POINTS.length-1;
+  const i1 = Math.max(0, POINTS[i2].mid===t? i2 : i2-1);
+  const a1=arr[i1], a2=arr[i2];
+  if(!a1||!a2||a1.dep<1||a2.dep<1||a1.seats<1||a2.seats<1) return null;
+  const p1=POINTS[i1],p2=POINTS[i2];
+  const f = p2.mid===p1.mid? 0 : (t-p1.mid)/(p2.mid-p1.mid);
+  const m1=metricsAt(a1,p1), m2=metricsAt(a2,p2);
+  const m={}; for(const k of ["fpd","spf","lf","open"]) m[k]=m1[k]+(m2[k]-m1[k])*f;
+  return m;
+}
+
+// ---- route alternatives: nearby-airport nonstop options ----
+const COORDS = DATA.coords || {};
+// manual same-area exceptions beyond the radius (kept symmetric)
+const ALT_EXTRA = {BOS:["BDL"], PVD:["BDL"], BDL:["BOS","PVD"]};
+function distMi(a, b){
+  const c1=COORDS[a], c2=COORDS[b];
+  if(!c1 || !c2) return null;
+  const p=Math.PI/180;
+  const h=Math.sin((c2[0]-c1[0])*p/2)**2
+        + Math.cos(c1[0]*p)*Math.cos(c2[0]*p)*Math.sin((c2[1]-c1[1])*p/2)**2;
+  return 2*3959*Math.asin(Math.sqrt(h));
+}
+// Radius defaults to 0 - just this airport - except where ALT_EXTRA gives the
+// airport a manual pairing, which only takes effect above 0, so those default to
+// 50 to pick it up. null in state means "not chosen yet, follow the airport";
+// once a radius is clicked that choice sticks and changing airports no longer
+// moves it.
+const defaultRad = code => (ALT_EXTRA[code] && ALT_EXTRA[code].length)? 50 : 0;
+// A blank airport means anywhere, whatever the radius chip says.
+function radFrom(){
+  if(state.origin==null) return Infinity;
+  return state.altRadFrom!=null? state.altRadFrom : defaultRad(A[state.origin][0]);
+}
+function radTo(){
+  if(state.altDest==null) return Infinity;
+  return state.altRadTo!=null? state.altRadTo : defaultRad(A[state.altDest][0]);
+}
+function syncRadChips(){
+  const set=(g,attr,v)=>{
+    const grp=document.getElementById(g);
+    if(!grp) return;
+    grp.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on", +c.dataset[attr]===v));
+  };
+  set("radFromGroup","radf",radFrom());
+  set("radToGroup","radt",radTo());
+}
+function nearbyCodes(code, miles){
+  if(code==null) return A.map(a=>({code:a[0], mi:0})); // anywhere
+  const lim = miles;
+  const out=[{code, mi:0}];
+  for(const a of A){
+    if(a[0]===code) continue;
+    const mi=distMi(code, a[0]);
+    if(mi!=null && mi<=lim) out.push({code:a[0], mi});
+  }
+  if(lim>0) for(const c of (ALT_EXTRA[code]||[])){
+    if(!out.some(x=>x.code===c) && CODE_IDX.has(c))
+      out.push({code:c, mi:distMi(code, c)||0});
+  }
+  return out;
+}
+// Scheduled block time from great-circle distance, fitted on the 80,256
+// same-timezone departure/arrival pairs in this dataset, where the zone offset
+// cancels and the gap is pure block time. Median error 7 minutes, 90th
+// percentile 16, and it still lands within a few minutes at transcontinental
+// range (2,475 mi predicts 359 min against a real ~360). Two caveats remain:
+// beyond about 2,500 miles it extrapolates past its data and reads roughly half
+// an hour long, and it is directionless, while headwinds swing a transatlantic
+// block by around an hour each way. So every number built on it says "est.",
+// and the duration - which needs no timezone at all - leads.
+const BLK_BASE = 45.4, BLK_PER_MI = 0.1267;
+// The (July, January) offset pair names a US zone, so Phoenix reads MST,
+// Honolulu HST, San Juan AST, Adak HAT. This replaces a table the pipeline used
+// to derive by solving median block times across the route graph; the IANA zone
+// already carries it, and the two agreed on all 234 domestic airports. Pairs
+// outside this table - every foreign airport - get no suffix, as before.
+const TZ_LABEL = {
+  "-240,-300":"ET", "-300,-360":"CT", "-360,-420":"MT", "-420,-420":"MST",
+  "-420,-480":"PT", "-480,-540":"AKT", "-600,-600":"HST", "-540,-600":"HAT",
+  "-240,-240":"AST", "600,600":"ChST"
+};
+const _tzCache = new Map();
+function tzAbbr(code){
+  if(_tzCache.has(code)) return _tzCache.get(code);
+  // US airports only. These are US zone names, and an offset pair is not unique
+  // across the world - Brisbane keeps the same +10 all year, exactly like Guam,
+  // and would otherwise read ChST. Foreign airports show times with no suffix.
+  const i=CODE_IDX.get(code);
+  const j=(i!=null && A[i][2]==="US")? utcOffMin(code,"2025-07") : null;
+  const w=(j==null)? null : utcOffMin(code,"2025-01");
+  const v=(j==null||w==null)? "" : (TZ_LABEL[j+","+w]||"");
+  _tzCache.set(code, v);
+  return v;
+}
+const tzOf = c => tzAbbr(c)? " "+tzAbbr(c) : "";
+
+function estBlockMin(o, d){
+  const mi = distMi(o, d);
+  return mi==null? null : Math.round(BLK_BASE + BLK_PER_MI*mi);
+}
+// Real UTC offset for an airport in a given month, from its IANA zone, so the
+// destination's own DST rules apply. TZ (derived from BTS block times) only ever
+// covered domestic airports and is a label rather than an offset; TZN covers all
+// of them. Against the derived table the two agree on all 234 domestic airports,
+// and swapping longitude for this drops the estimated-arrival error from a
+// 31-minute median to 8. A zone we do not have returns null, and the caller
+// shows no clock time rather than a guessed one.
+const TZN = DATA.tzn || {};
+const _offCache = new Map();
+function utcOffMin(code, ym){
+  const z = TZN[code];
+  if(!z || !ym) return null;
+  const k = code+"|"+ym;
+  if(_offCache.has(k)) return _offCache.get(k);
+  let v = null;
+  try{
+    const d = new Date(Date.UTC(+ym.slice(0,4), +ym.slice(5,7)-1, 15, 18));
+    const part = new Intl.DateTimeFormat("en-US",{timeZone:z, timeZoneName:"longOffset"})
+      .formatToParts(d).find(x=>x.type==="timeZoneName");
+    const m = part && part.value.match(/GMT([+-])(\d{2}):(\d{2})/);
+    if(m) v = (m[1]==="-"? -1:1)*(+m[2]*60 + +m[3]);
+  }catch(e){ v = null; }
+  _offCache.set(k, v);
+  return v;
+}
+function durText(min){
+  if(min==null) return "";
+  const h=Math.floor(min/60), m=min%60;
+  if(!h) return m+" min";
+  return m? h+" hr "+m+" min" : h+" hr";
+}
+// estimated arrival for a leg we have no arrival times for
+function estArrival(o, d, dep, dmi){
+  const blk=estBlockMin(o,d);
+  if(blk==null) return null;
+  const ym=(DATA.dm||[])[dmi>=0? dmi : NEWEST_DMI];
+  const oo=utcOffMin(o,ym), od=utcOffMin(d,ym);
+  if(oo==null || od==null) return {t:null, nd:false, blk};
+  let t=hhmmMin(dep)+blk+(od-oo);
+  const nd = t>=1440 || t<0;
+  t=((t%1440)+1440)%1440;
+  return {t:Math.floor(t/60)*100+t%60, nd, blk};
+}
+function estLegText(o, d, dep, dmi){
+  const e=estArrival(o,d,dep,dmi);
+  if(!e) return "";
+  // the duration stands on its own; the clock time only appears when both zones
+  // are known, so an unknown zone shows nothing rather than a wrong time
+  return "est. "+durText(e.blk)
+    +(e.t==null? "" : " (arrives "+fmtT(e.t)+(e.nd? " +1 day":"")+" local)");
+}
+
+// does this route operate on weekday `dow` (0=Mon)? unknown pattern = assume yes
+const MCT = 45; // minutes: minimum hub connection assumed for arrival estimates
+const hhmmMin = t => Math.floor(t/100)*60 + t%100;
+function banksOf(o, d, dmi){
+  const key=o+"-"+d;
+  const t=(dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
+  const a=(dmi>=0 && ARRS[key])? ARRS[key][dmi] : null;
+  if(t && t.length) return {dep:t, arr:(a && a.length===t.length)? a : null};
+  if(ITIMES[key] && ITIMES[key].length>1) return {dep:ITIMES[key].slice(1), arr:null};
+  return null;
+}
+// earliest scheduled arrival at the final destination; null when unknown.
+// connections assume a same-day hub connection of at least MCT minutes.
+function earliestArrival(legs, dmi){
+  const bs = legs.map(l=>banksOf(l.f, l.t, dmi));
+  if(bs.some(b=>!b || !b.arr)) return null;
+  let best=null;
+  for(let i=0;i<bs[0].dep.length;i++){
+    const d0=hhmmMin(bs[0].dep[i]);
+    let cur=hhmmMin(bs[0].arr[i]), lastArr=bs[0].arr[i], ok=true;
+    if(bs.length>1 && cur<d0) continue; // overnight first leg; not modelled
+    for(let L=1;L<bs.length && ok;L++){
+      let hit=-1;
+      for(let j=0;j<bs[L].dep.length;j++){
+        if(hhmmMin(bs[L].dep[j]) >= cur+MCT){ hit=j; break; } // banks are time-ordered
+      }
+      if(hit<0){ ok=false; break; }
+      const dep=hhmmMin(bs[L].dep[hit]), arr=hhmmMin(bs[L].arr[hit]);
+      if(arr<dep && L<bs.length-1){ ok=false; break; } // mid-trip overnight; not modelled
+      cur=arr; lastArr=bs[L].arr[hit];
+    }
+    if(!ok) continue;
+    const nd = cur < d0;
+    const key = cur + (nd?1440:0);
+    if(best===null || key<best.key) best={t:lastArr, nd, key};
+  }
+  return best;
+}
+
+// true when every leg has arrival data, i.e. the chain can actually be checked
+function legsHaveArrivals(legs, dmi){
+  return legs.every(l=>{ const b=banksOf(l.f, l.t, dmi); return !!(b && b.arr); });
+}
+const arrText = (a, at) => a? ("Arrives "+fmtT(a.t)+tzOf(at)+(a.nd? " +1 day":"")) : "";
+function opsOnDay(o, d, dmi, dow){
+  if(dow<0) return true;
+  const key=o+"-"+d;
+  let mask=(dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
+  if(!mask && ITIMES[key] && ITIMES[key].length>1) mask=ITIMES[key][0];
+  if(!mask || mask===127) return true;
+  return !!(mask>>dow & 1);
+}
+// Shared by both connection searches. The trip finder has no day control, so it
+// passes dow -1 and opsOnDay waves every day through; it also has no radius, so
+// it passes empty sets and viaOK reduces to the international gate.
+function connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF){
+  // Foreign connecting points sit behind the toggle. Their onward legs carry no
+  // departure times at all in this data, so a connection through one can never
+  // be checked for same-day feasibility - it is offered, not verified.
+  const usOnly = !state.altIntl;
+  const isUS = c => { const i=CODE_IDX.get(c); return i!=null && A[i][2]==="US"; };
+  const viaOK = c => !fromSet.has(c) && !toSet.has(c) && (!usOnly || isUS(c));
+  // A connection has to go roughly the same way as the trip. Without this the
+  // widest-open seats win outright and a domestic pair gets routed over Seoul or
+  // London: those legs are widebodies with hundreds of empty seats and, having no
+  // arrival times, they escape the same-day check as well. Unknown geography is
+  // allowed through rather than hidden.
+  const MAX_CIRCUITY = state.altIntl? 4 : 2.5;
+  function circuityOK(codes){
+    const dd=distMi(codes[0], codes[codes.length-1]);
+    if(dd==null || dd<=0) return true;
+    let sum=0;
+    for(let i=0;i+1<codes.length;i++){
+      const leg=distMi(codes[i], codes[i+1]);
+      if(leg==null) return true;
+      sum+=leg;
+    }
+    return sum <= dd*MAX_CIRCUITY;
+  }
+  // Connections are not restricted to Delta hubs: any airport with enough
+  // service on both legs can carry one (MSP -> MSN -> BOS). destSeries and the
+  // per-leg verdict are both cached for the render, which is what keeps the
+  // wider search affordable - the same leg is asked about once, not once per
+  // origin/destination pair.
+  const serCache=new Map();
+  const serOf=i=>{ if(!serCache.has(i)) serCache.set(i,destSeries(i)); return serCache.get(i); };
+  const legCache=new Map();
+  function legMetric(fi, ti){ // usable connecting leg, or null
+    const k=fi*100000+ti;
+    if(legCache.has(k)) return legCache.get(k);
+    const f=A[fi][0], t=A[ti][0];
+    let m=metricFromSeries(serOf(fi).get(ti));
+    if(m && (m.fpd<MINF || isDeadRoute(m.fpd,f,t,dmi) || !opsOnDay(f,t,sdi,dow))) m=null;
+    legCache.set(k, m||null);
+    return m||null;
+  }
+  return {viaOK, circuityOK, serOf, legMetric};
+}
+
+function computeAlts(){
+  const O=state.origin==null? null : A[state.origin][0];
+  const D=state.altDest==null? null : A[state.altDest][0];
+  // dmi = the viewed month, which decides whether a route still exists at all.
+  // sdi = the schedule month, which decides what days and times it runs.
+  const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
+  // nonstops must clear the Frequency chip; connecting legs must clear it and
+  // ~3x/week besides, as in the trip finder
+  const MINF=Math.max(0.4, state.minFpd);
+  const maxStops=state.altStops;
+  const froms=nearbyCodes(O, radFrom()), tos=nearbyCodes(D, radTo());
+  // An airport you could simply drive to is not a connection. Flying into an
+  // airport inside your own departure radius means backtracking past it (RST ->
+  // MSP when you are at MSP); connecting inside the destination radius means
+  // flying past a landing point you already accept. Anywhere on either side
+  // therefore means nonstops only: with every airport an acceptable start or
+  // landing, connecting through one never beats using it directly.
+  const fromSet=new Set(froms.map(x=>x.code)), toSet=new Set(tos.map(x=>x.code));
+  const {viaOK, circuityOK, serOf, legMetric} = connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF);
+
+  // last leg into each destination, from anywhere; independent of the origin
+  const toDestByD={};
+  for(const nd of tos){
+    const di=CODE_IDX.get(nd.code);
+    if(di==null) continue;
+    const t={};
+    if(maxStops>=1){
+      for(const xi of originSeries(di).keys()){
+        const xc=A[xi][0];
+        if(xc===nd.code || !viaOK(xc)) continue;
+        const m=legMetric(xi, di);
+        if(m) t[xc]=m;
+      }
+    }
+    toDestByD[nd.code]=t;
+  }
+
+  const list=[];
+  for(const no of froms){
+    const oi=CODE_IDX.get(no.code);
+    if(oi==null || !byOrigin.has(oi)) continue;
+    const ser=serOf(oi);
+    const viaFrom={}; // first leg out of this origin, same for every destination
+    for(const xi of ser.keys()){
+      const xc=A[xi][0];
+      if(xc===no.code || !viaOK(xc)) continue;
+      const m=legMetric(oi, xi);
+      if(m) viaFrom[xc]=m;
+    }
+    for(const nd of tos){
+      if(nd.code===no.code) continue;
+      const di=CODE_IDX.get(nd.code);
+      if(di==null) continue;
+      const options=[];
+      const direct=metricFromSeries(ser.get(di));
+      if(direct && direct.fpd>=state.minFpd && !isDeadRoute(direct.fpd, no.code, nd.code, dmi)
+          && opsOnDay(no.code, nd.code, sdi, dow))
+        options.push({legs:[{f:no.code,t:nd.code,m:direct}], bn:direct.open, direct:true});
+      const toDest=toDestByD[nd.code]||{};
+      if(maxStops>=1){
+        for(const x in viaFrom){
+          if(x===nd.code || x===no.code) continue;
+          const m2=toDest[x];
+          if(!m2 || !circuityOK([no.code,x,nd.code])) continue;
+          options.push({legs:[{f:no.code,t:x,m:viaFrom[x]},{f:x,t:nd.code,m:m2}],
+                        bn:Math.min(viaFrom[x].open, m2.open)});
+        }
+      }
+      if(maxStops>=2){
+        for(const x1 in viaFrom){
+          if(x1===nd.code || x1===no.code) continue;
+          const x1i=CODE_IDX.get(x1);
+          for(const x2 in toDest){
+            if(x2===x1 || x2===no.code || x2===nd.code) continue;
+            const mm=legMetric(x1i, CODE_IDX.get(x2));
+            if(!mm || !circuityOK([no.code,x1,x2,nd.code])) continue;
+            options.push({legs:[{f:no.code,t:x1,m:viaFrom[x1]},
+                                {f:x1,t:x2,m:mm},
+                                {f:x2,t:nd.code,m:toDest[x2]}],
+                          bn:Math.min(viaFrom[x1].open, mm.open, toDest[x2].open)});
+          }
+        }
+      }
+      if(!options.length) continue;
+      // drop connections that cannot be made the same day; keep ones we can't
+      // check (international legs carry departures but no arrivals)
+      for(const o of options) o.arr=earliestArrival(o.legs, sdi);
+      const usable=options.filter(o=> o.legs.length===1 || o.arr!==null
+                                      || !legsHaveArrivals(o.legs, sdi));
+      // every routing is its own row: picking one winner per pair hid the
+      // nonstop whenever a detour had a few more open seats
+      for(const b of usable) list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi,
+                 legs:b.legs, bn:b.bn, arr:b.arr,
+                 m:b.legs.length===1? b.legs[0].m : null,
+                 worstLf:Math.max(...b.legs.map(l=>l.m.lf)),
+                 orig:no.code===O && nd.code===D});
+    }
+  }
+  if(state.altSort==="arr")
+    list.sort((a,b)=> (a.arr===null)-(b.arr===null)
+      || ((a.arr&&b.arr)? a.arr.key-b.arr.key : 0) || (b.bn-a.bn));
+  else list.sort((a,b)=>b.bn-a.bn);
+  return list;
+}
+function legTimesHTML(f, t, dmi){
+  const b=banksOf(f, t, dmi);
+  const key=f+"-"+t;
+  let mask=(dmi>=0 && DAYS[key])? DAYS[key][dmi] : 0;
+  if(!mask && ITIMES[key] && ITIMES[key].length>1) mask=ITIMES[key][0];
+  const dl=(mask>0 && mask<127)? daysLabel(mask) : null;
+  let note=dl? dl : "";
+  const zf=tzAbbr(f), zt=tzAbbr(t);
+  if(b && zf) note += (note? " · ":"") + (b.arr && zt && zt!==zf? zf+" → "+zt : zf);
+  let times;
+  if(!b || !b.dep.length) times='<span class="na">No schedule data</span>';
+  else if(b.arr) times=b.dep.map((d,i)=>fmtT(d)+" → "+fmtT(b.arr[i])).join(" · ");
+  else {
+    // no arrival times for this leg: lead with the estimated flight time, which
+    // needs no timezone, and put the clock arrival behind it
+    const est=estLegText(f, t, b.dep[0], dmi);
+    times=b.dep.map(fmtT).join(" · ")
+      + (est? ' <span class="na">'+esc(est)+"</span>"
+            : ' <span class="na">(departures only)</span>');
+  }
+  const place=c=>{ const i=CODE_IDX.get(c); return i==null? c : c+' <span class="dim">'+esc(A[i][1])+"</span>"; };
+  return '<div class="legrow"><b>'+place(f)+" → "+place(t)+"</b>"
+    +(note? '<span class="dim">'+note+"</span>" : "")
+    +'<div class="legtimes">'+times+"</div></div>";
+}
+function altDetailHTML(r, dmi){
+  return r.legs.map(l=>legTimesHTML(l.f, l.t, dmi)).join("");
+}
+
+function renderAlts(){
+  const cont=document.getElementById("rows");
+  const sum=document.getElementById("summary");
+  syncRadChips(); // the effective radius follows the airport until one is picked
+  const oc = state.origin==null? "anywhere" : A[state.origin][0];
+  const dc = state.altDest==null? "anywhere" : A[state.altDest][0];
+  const isWeek=state.mode==="week";
+  const whenTxt = whenText();
+  const list=computeAlts();
+  const dayTxt = state.altDow<0? "any day" : DOW_FULL[state.altDow];
+  sum.innerHTML="<strong>"+list.length+(list.length===1?" flight":" flights")+"</strong> "+oc+" → "+dc
+    +" · "+dayTxt+" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"")
+    +" · "+(radFrom()===0? oc+" only" : radFrom()===Infinity? "from anywhere" : "departure radius "+radFrom()+" mi")
+    +", "+(radTo()===0? dc+" only" : radTo()===Infinity? "to anywhere" : "destination radius "+radTo()+" mi")
+    +(state.altStops===0? " · nonstop only" : " · up to "+state.altStops+(state.altStops===1?" stop":" stops"))
+    +(state.altIntl? " · international connections included" : "")
+    +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
+  if(!list.length){
+    cont.innerHTML='<div class="empty">No '+(state.altStops===0?"nonstop ":"")+'service for this pair on '+dayTxt+'.</div>';
+    return;
+  }
+  const dmi=schedIdx(); // days and times shown come from the schedule month
+  let html="";
+  list.forEach(r=>{
+    const co=A[CODE_IDX.get(r.o)], cd=A[CODE_IDX.get(r.d)];
+    let tags="";
+    if(r.orig) tags='<span class="tag" style="color:var(--board);border-color:var(--board)">Your route</span>';
+    else{
+      if(r.om>0) tags+='<span class="tag">'+r.o+" · "+Math.round(r.om)+" mi away</span>";
+      if(r.dm2>0) tags+='<span class="tag">'+r.d+" · "+Math.round(r.dm2)+" mi away</span>";
+    }
+    const akey=r.legs.map(l=>l.f).concat(r.d).join("-"), isOpen=state.altOpen===akey;
+    html+='<div class="rowbtn altrow'+(r.orig?" orig":"")+'" data-akey="'+akey+'" role="button" tabindex="0" aria-expanded="'+isOpen+'">'
+      +'<span class="dcode altcode">'+r.o+'→'+r.d+'</span>'
+      +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
+    if(r.legs.length===1){
+      const colB=lfColor(r.m.lf), colT=lfText(r.m.lf);
+      let arrLine=arrText(r.arr, r.d);
+      if(!arrLine){ // no arrival times: estimated flight time, clock time behind it
+        const b=banksOf(r.o, r.d, dmi);
+        if(b && b.dep.length) arrLine=estLegText(r.o, r.d, b.dep[0], dmi);
+      }
+      html+=schedHTML(r.m.fpd, r.o, r.d, dmi, arrLine, r.o)
+        +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.m.lf).toFixed(1)+'%;background:'+colB+'"></span></span><span class="lfnum" style="color:'+colT+'">'+r.m.lf.toFixed(0)+"%</span></span>"
+        +'<span class="opennum" style="color:'+colT+'">'+Math.round(r.m.open)+'<small class="mcap">open seats/flight</small></span>';
+    } else {
+      const col=lfText(r.worstLf);
+      const legHtml=r.legs.map((l,li)=>{
+        const c=lfText(l.m.lf);
+        return (li? '<span class="legarrow">›</span>':'')
+          +'<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
+      }).join("");
+      html+='<span class="legs">'+legHtml
+        +(r.arr? '<small class="arrline">'+arrText(r.arr, r.d)+"</small>" : "")+"</span>"
+        +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+'<small>min open/leg</small></span>';
+    }
+    html+="</div>"
+      +'<div class="altdetail'+(isOpen?" open":"")+'">'+(isOpen? altDetailHTML(r, dmi):"")+"</div>";
+  });
+  cont.innerHTML=html;
+  cont.querySelectorAll(".altrow").forEach(el=>{
+    const toggle=()=>{ state.altOpen = state.altOpen===el.dataset.akey? null : el.dataset.akey; renderBoard(); };
+    el.addEventListener("click", toggle);
+    el.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } });
+  });
+}
+
+function computeTrips(){
+  const oIdx = state.origin, oCode = A[oIdx][0];
+  const oSer = destSeries(oIdx);
+  const MINF = 0.4; // ~3x/week per leg minimum for realistic standby
+  // dmi decides whether a route still exists; sdi is the schedule being shown
+  const dmi = currentDaysIdx(), sdi = schedIdx();
+  // Same rules as the Alternatives tab, minus the day and radius controls it
+  // does not have: dow -1 accepts every day, and the empty sets leave viaOK as
+  // just the international gate.
+  const {viaOK, circuityOK, serOf, legMetric} =
+    connectionHelpers(dmi, sdi, -1, new Set(), new Set(), MINF);
+
+  // first leg out of the origin, shared by every destination
+  const viaFrom={};
+  for(const xi of oSer.keys()){
+    const xc=A[xi][0];
+    if(xc===oCode || !viaOK(xc)) continue;
+    const m=legMetric(oIdx, xi);
+    if(m) viaFrom[xc]=m;
+  }
+  const out = [];
+  for(let d=0; d<A.length; d++){
+    if(d===oIdx) continue;
+    const c = contOf(d);
+    if(c===null) continue;
+    if(state.cont!=="all" && c!==state.cont) continue;
+    if(state.cont==="na" && state.naArea!=="all" && areaOf(d)!==state.naArea) continue;
+    if(state.gemsOnly && BUSY.has(d)) continue;
+    const code = A[d][0];
+    const options = [];
+    const direct = metricFromSeries(oSer.get(d));
+    if(direct && direct.fpd>=MINF && !isDeadRoute(direct.fpd,oCode,code,dmi))
+      options.push({legs:[{f:oCode,t:code,m:direct}], bn:direct.open, direct:true});
+    for(const xi of originSeries(d).keys()){
+      const xc=A[xi][0];
+      if(xc===code || xc===oCode || !viaFrom[xc]) continue;
+      const m2=legMetric(xi, d);
+      if(!m2 || !circuityOK([oCode,xc,code])) continue;
+      options.push({legs:[{f:oCode,t:xc,m:viaFrom[xc]},{f:xc,t:code,m:m2}],
+                    bn:Math.min(viaFrom[xc].open, m2.open), direct:false});
+    }
+    if(!options.length) continue;
+    // drop connections that cannot be made the same day; keep the ones we cannot
+    // check, which is international legs carrying departures but no arrivals
+    const usable=options.filter(o=> o.legs.length===1
+      || earliestArrival(o.legs, sdi)!==null || !legsHaveArrivals(o.legs, sdi));
+    if(!usable.length) continue;
+    usable.sort((a,b)=>b.bn-a.bn);
+    let best = usable[0];
+    const dOpt = usable.find(o=>o.direct);
+    if(dOpt && dOpt.bn >= best.bn-5) best = dOpt; // prefer nonstop when close
+    const ap = A[d];
+    out.push({d, code, city:ap[1], legs:best.legs, bn:best.bn,
+      sumOpen:best.legs.reduce((s,l)=>s+l.m.open,0),
+      worstLf:Math.max(...best.legs.map(l=>l.m.lf))});
+  }
+  out.sort((a,b)=> (b.bn-a.bn) || (b.sumOpen-a.sumOpen) || (a.legs.length-b.legs.length));
+  return out;
+}
+
+function renderTrips(){
+  const cont = document.getElementById("rows");
+  if(state.origin==null){
+    document.getElementById("summary").innerHTML="<strong>Trip ideas</strong> · pick a From airport";
+    cont.innerHTML='<div class="empty">Trip ideas need a departure airport. Type one in the <b>From</b> box.</div>';
+    return;
+  }
+  const list = computeTrips();
+  const oa = A[state.origin];
+  const isWeek = state.mode==="week";
+  const whenTxt = whenText();
+  const sum = document.getElementById("summary");
+  if(list.length){
+    const CONT_NAME={all:"everywhere",na:"North America",eu:"Europe",as:"Asia",sa:"South America",af:"Africa",oc:"Oceania"};
+    const AREA_NAME={all:"",ne:"Northeast",mw:"Midwest",so:"South",sw:"Southwest",we:"West",ca:"Canada",other:"everything else"};
+    let where = CONT_NAME[state.cont]||"everywhere";
+    if(state.cont==="na" && state.naArea!=="all") where = AREA_NAME[state.naArea];
+    sum.innerHTML = "<strong>"+list.length+" trip ideas</strong> from "+oa[0]+" · "+esc(where)
+      +" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"")
+      +(state.gemsOnly? " · off the beaten path" : "")
+      +" · ranked by tightest leg";
+  } else sum.textContent="";
+  if(!list.length){
+    cont.innerHTML='<div class="empty">No trips match.</div>';
+    return;
+  }
+  const dmi = schedIdx(); // as on the other tabs, shown schedules follow the toggle
+  let html="";
+  list.forEach((r,i)=>{
+    const col = lfText(r.worstLf);
+    const legHtml = r.legs.map((l,li)=>{
+      const c = lfText(l.m.lf);
+      return (li? '<span class="legarrow">›</span>':'')+
+        '<span class="leg">'+l.f+'→'+l.t+' <b style="color:'+c+'">'+l.m.lf.toFixed(0)+'%</b> <small>'+Math.round(l.m.open)+' open · '+freqTxt(l.m.fpd,l.f,l.t,dmi)+'</small></span>';
+    }).join("");
+    const isOpen = state.tripOpen===r.code;
+    html += '<div class="triprow" data-tkey="'+r.code+'" role="button" tabindex="0" aria-expanded="'+isOpen+'">'
+      +'<span class="trdest"><span class="dcode">'+r.code+'</span><span class="dcity" style="display:block">'+esc(r.city)
+        +(r.legs.length===1?'<span class="tag">Nonstop</span>':"")+"</span></span>"
+      +'<span class="legs">'+legHtml+"</span>"
+      +'<span class="opennum" style="color:'+col+'">'+Math.round(r.bn)+"<small>min open/leg</small></span>"
+      +"</div>"
+      +'<div class="altdetail'+(isOpen?" open":"")+'">'+(isOpen? altDetailHTML(r, dmi):"")+"</div>";
+  });
+  cont.innerHTML=html;
+  cont.querySelectorAll(".triprow").forEach(el=>{
+    const toggle=()=>{ state.tripOpen = state.tripOpen===el.dataset.tkey? null : el.dataset.tkey; renderBoard(); };
+    el.addEventListener("click", toggle);
+    el.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } });
+  });
+}
+
+// ---- month chips ----
+function renderMonths(){
+  const el = document.getElementById("months");
+  el.innerHTML="";
+  for(let m=1;m<=12;m++){
+    const has = yearsByMonth[m].size>0;
+    const b = document.createElement("button");
+    b.className = "mo"+(state.month===m?" on":"");
+    b.disabled=!has; if(!has) b.style.opacity=.3;
+    b.innerHTML = MONTH_ABBR[m-1].charAt(0)+MONTH_ABBR[m-1].slice(1).toLowerCase()+'<span class="yr">'+(has? (state.span==="avg"?"avg":"’"+String(latestYearFor(m)).slice(2)) :"—")+"</span>";
+    b.onclick = ()=>{ state.month=m; renderMonths(); renderBoard(); };
+    el.appendChild(b);
+  }
+}
+
+// ---- week slider ----
+const slider = document.getElementById("weekSlider");
+slider.max = WEEKS.length-1;
+slider.value = state.week;
+function weekLabel(wi){
+  return 'Week of <b>'+fmtDate(WEEKS[wi])+'</b><span class="estbadge">Estimate</span>';
+}
+function renderWeekOut(){
+  document.getElementById("weekOut").innerHTML = weekLabel(state.week);
+}
+slider.addEventListener("input",()=>{ state.week=+slider.value; renderWeekOut(); renderBoard(); });
+document.getElementById("wPrev").onclick=()=>{ if(state.week>0){state.week--; slider.value=state.week; renderWeekOut(); renderBoard();} };
+document.getElementById("wNext").onclick=()=>{ if(state.week<WEEKS.length-1){state.week++; slider.value=state.week; renderWeekOut(); renderBoard();} };
+
+// ---- mode switch ----
+function setMode(m){
+  state.mode=m;
+  document.getElementById("modeMonth").classList.toggle("on",m==="month");
+  document.getElementById("modeWeek").classList.toggle("on",m==="week");
+  document.getElementById("monthPick").classList.toggle("off",m!=="month");
+  document.getElementById("weekPick").classList.toggle("on",m==="week");
+  document.getElementById("spanSwitch").style.display = m==="month"? "":"none";
+  renderBoard();
+}
+document.getElementById("modeMonth").onclick=()=>setMode("month");
+document.getElementById("modeWeek").onclick=()=>setMode("week");
+function setSpan(sp){
+  state.span=sp;
+  document.getElementById("spanLatest").classList.toggle("on",sp==="latest");
+  document.getElementById("spanAvg").classList.toggle("on",sp==="avg");
+  renderMonths();
+  renderBoard();
+}
+document.getElementById("spanLatest").onclick=()=>setSpan("latest");
+document.getElementById("spanAvg").onclick=()=>setSpan("avg");
+function setSched(sc){
+  state.sched=sc; state.altOpen=null;
+  document.getElementById("schedNewest").classList.toggle("on",sc==="newest");
+  document.getElementById("schedSeasonal").classList.toggle("on",sc==="seasonal");
+  renderBoard();
+}
+document.getElementById("schedNewest").onclick=()=>setSched("newest");
+document.getElementById("schedSeasonal").onclick=()=>setSched("seasonal");
+
+// ---- airport pickers: From and To, blank meaning anywhere ----
+const destSeats = new Map();
+for(const r of rows){ destSeats.set(r[1],(destSeats.get(r[1])||0)+r[5]); }
+const destList = [...destSeats.keys()].sort((a,b)=>(destSeats.get(b)||0)-(destSeats.get(a)||0));
+function picker(inputId, menuId, list, get, set){
+  const input=document.getElementById(inputId), menu=document.getElementById(menuId);
+  const label=()=>{ const i=get(); input.value = i==null? "" : A[i][0]+" — "+A[i][1]; };
+  const open=q=>{
+    const ql=(q||"").trim().toLowerCase();
+    const matches=list.filter(idx=>{ const a=A[idx];
+      return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql); });
+    menu.innerHTML = matches.map(idx=>{ const a=A[idx];
+      return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
+    }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
+    menu.classList.add("open");
+  };
+  input.addEventListener("focus",()=>{ input.select(); open(""); });
+  input.addEventListener("input",()=>open(input.value));
+  // clearing the box and leaving it is how you pick "anywhere"
+  input.addEventListener("blur",()=>setTimeout(()=>{ menu.classList.remove("open");
+    if(!input.value.trim()){ if(get()!=null){ set(null); renderBoard(); } } else label(); },150));
+  menu.addEventListener("mousedown",e=>{
+    const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
+    set(+opt.dataset.idx); menu.classList.remove("open"); label(); renderBoard();
+  });
+  label();
+}
+picker("originInput","originMenu",originList, ()=>state.origin, v=>{ state.origin=v; });
+picker("destInput","destMenu",destList, ()=>state.altDest, v=>{ state.altDest=v; });
+(function(){
+  const dg=document.getElementById("dowGroup");
+  dg.innerHTML='<button class="chip on" data-dow="-1">Any</button>'
+    +DOW_FULL.map((d,i)=>'<button class="chip" data-dow="'+i+'">'+d.slice(0,3)+"</button>").join("");
+  dg.addEventListener("click",e=>{
+    const b=e.target.closest("[data-dow]"); if(!b) return;
+    state.altDow=+b.dataset.dow;
+    dg.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("freqGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-minf]"); if(!b) return;
+    state.minFpd=+b.dataset.minf; state.altOpen=null;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("radFromGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-radf]"); if(!b) return;
+    state.altRadFrom=+b.dataset.radf;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("intlChip").addEventListener("click",e=>{
+    state.altIntl=!state.altIntl;
+    e.currentTarget.classList.toggle("on",state.altIntl);
+    state.altOpen=null;
+    renderBoard();
+  });
+  document.getElementById("stopsGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-stops]"); if(!b) return;
+    state.altStops=+b.dataset.stops;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("sortGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-asort]"); if(!b) return;
+    state.altSort=b.dataset.asort;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+  document.getElementById("radToGroup").addEventListener("click",e=>{
+    const b=e.target.closest("[data-radt]"); if(!b) return;
+    state.altRadTo=+b.dataset.radt;
+    e.currentTarget.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));
+    renderBoard();
+  });
+})();
+
+// ---- filters ----
+// ---- view tabs ----
+function setView(v){
+  state.view=v;
+  document.getElementById("tabTrip").classList.toggle("on",v==="trip");
+  document.getElementById("tabAlt").classList.toggle("on",v==="alt");
+  document.getElementById("contGroup").style.display = v==="trip"? "":"none";
+  syncAreaGroup();
+  document.getElementById("altGroup").style.display = v==="alt"? "":"none";
+  renderBoard();
+}
+document.getElementById("tabTrip").onclick=()=>setView("trip");
+document.getElementById("tabAlt").onclick=()=>setView("alt");
+function syncAreaGroup(){
+  const g=document.getElementById("areaGroup");
+  g.style.display = (state.view==="trip" && state.cont==="na")? "":"none";
+}
+document.getElementById("gemChip").addEventListener("click",e=>{
+  state.gemsOnly=!state.gemsOnly;
+  e.currentTarget.classList.toggle("on",state.gemsOnly);
+  renderBoard();
+});
+document.getElementById("contGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-cont]"); if(!b) return;
+  state.cont=b.dataset.cont; state.tripOpen=null;
+  document.querySelectorAll("#contGroup .chip[data-cont]").forEach(c=>c.classList.toggle("on",c===b));
+  syncAreaGroup();
+  renderBoard();
+});
+document.getElementById("areaGroup").addEventListener("click",e=>{
+  const b=e.target.closest("[data-area]"); if(!b) return;
+  state.naArea=b.dataset.area; state.tripOpen=null;
+  document.querySelectorAll("#areaGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
+  renderBoard();
+});
+
+// ---- board ----
+function renderBoard(){
+  if(state.view==="trip") renderTrips(); else renderAlts();
+}
+
+// ---- theme toggle ----
+(function(){
+  const btn = document.getElementById("themeBtn");
+  function sync(){ btn.textContent = document.documentElement.dataset.theme==="dark"? "Light mode" : "Dark mode"; }
+  btn.addEventListener("click", ()=>{
+    const next = document.documentElement.dataset.theme==="dark"? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("esa-theme", next); } catch(e){}
+    sync();
+  });
+  sync();
+})();
+
+// ---- init ----
+(function(){
+  const p0=POINTS[0], pn=POINTS[POINTS.length-1];
+  document.getElementById("stampRange").textContent =
+    MONTH_ABBR[p0.m-1].charAt(0)+MONTH_ABBR[p0.m-1].slice(1).toLowerCase()+" "+p0.y+" – "+
+    MONTH_ABBR[pn.m-1].charAt(0)+MONTH_ABBR[pn.m-1].slice(1).toLowerCase()+" "+pn.y;
+  (function(){
+    const btn=document.getElementById("optBtn"), panel=document.getElementById("optPanel");
+    const setOpen=o=>{ panel.classList.toggle("open",o); btn.classList.toggle("on",o);
+                       btn.setAttribute("aria-expanded",o?"true":"false"); };
+    btn.addEventListener("click",e=>{ e.stopPropagation(); setOpen(!panel.classList.contains("open")); });
+    // the panel holds live controls, so only a click outside it closes it
+    document.addEventListener("click",e=>{
+      if(panel.classList.contains("open") && !panel.contains(e.target) && e.target!==btn) setOpen(false);
+    });
+    document.addEventListener("keydown",e=>{
+      if(e.key==="Escape" && panel.classList.contains("open")){ setOpen(false); btn.focus(); }
+    });
+  })();
+  syncRadChips(); // correct even before the Alternatives tab is first opened
+  renderMonths();
+  renderWeekOut();
+  setView(state.view); // also shows the tab's own controls
+})();
+</script>
+</body>
+</html>

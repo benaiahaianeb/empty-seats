@@ -1,0 +1,61 @@
+name: Pipeline check
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas requests
+      - name: Compile, import, unit-test the carrier generalisation
+        run: |
+          python -m py_compile refresh_data.py
+          python - <<'PY'
+          import io, zipfile, pathlib, tempfile, pandas as pd, refresh_data as R
+          print("import ok; carriers:", list(R.CARRIERS))
+          for gone in ("rebuild_skywest_share",): assert not hasattr(R, gone)
+          for kept in ("rebuild_op_share", "rebuild_route_days", "rebuild_iana", "main"): assert hasattr(R, kept), kept
+
+          # ---- fixture: one on-time month, three operators, two marketers ----
+          rows = []
+          def f(mkt, op, o, d, date, dep, arr):
+              rows.append({"FlightDate":date,"Marketing_Airline_Network":mkt,"Operating_Airline ":op,
+                           "Origin":o,"Dest":d,"CRSDepTime":dep,"CRSArrTime":arr})
+          for day in range(1, 32):
+              date = f"2025-07-{day:02d}"
+              f("DL","DL","BOS","ATL",date,"0700","1000")          # mainline
+              f("DL","OO","MSP","RST",date,"0900","0950")          # SkyWest for Delta
+              if day % 2: f("UA","OO","MSP","RST",date,"1300","1350")   # SkyWest for United, half as often
+              f("UA","UA","EWR","SFO",date,"0800","1130")
+          csv = pd.DataFrame(rows).to_csv(index=False).encode()
+          buf = io.BytesIO(); zipfile.ZipFile(buf, "w").writestr("m.csv", csv)
+          class Resp:
+              status_code = 200; headers = {"Content-Type": "application/zip"}; content = buf.getvalue()
+          class S:
+              def get(self, *a, **k): return Resp()
+
+          tmp = pathlib.Path(tempfile.mkdtemp())
+          R.SHARE_CSV = tmp / "op_share.csv"; R.DAYS_CSV = tmp / "route_days.csv"
+          R.rebuild_op_share(S(), 2025)
+          sh = pd.read_csv(R.SHARE_CSV)
+          print(sh.to_string())
+          get = lambda op,o,d,m: float(sh[(sh.op==op)&(sh.o==o)&(sh.d==d)&(sh.mkt==m)].share.iloc[0])
+          assert abs(get("OO","MSP","RST","DL") - 31/47) < 1e-9, "DL share of SkyWest MSP-RST"
+          assert abs(get("OO","MSP","RST","UA") - 16/47) < 1e-9, "UA share"
+          assert get("DL","BOS","ATL","DL") == 1.0
+          print("op_share: shares sum per operator-route and split by marketer")
+
+          ops = {"DL": {"DL","OO"}, "UA": {"UA","OO"}}
+          R.rebuild_route_days(S(), [(2025, 7)], ops)
+          rd = pd.read_csv(R.DAYS_CSV)
+          print(rd.to_string())
+          assert set(rd.mkt) == {"DL","UA"}
+          dl = rd[(rd.mkt=="DL")&(rd.o=="MSP")&(rd.d=="RST")].iloc[0]
+          ua = rd[(rd.mkt=="UA")&(rd.o=="MSP")&(rd.d=="RST")].iloc[0]
+          assert int(dl["mask"]) == 127 and "900" in str(dl.times), dl
+          assert "1300" in str(ua.times) and "900" not in str(ua.times), "United's banks must not include Delta's"
+          assert not len(rd[(rd.mkt=="UA")&(rd.o=="BOS")]), "no BOS-ATL under United"
+          print("route_days: one row per marketer, times kept apart")
+          PY

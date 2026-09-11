@@ -2,9 +2,9 @@
 """
 Empty Seats data refresh.
 
-Downloads the latest BTS T-100 Segment data (Delta mainline DL + Endeavor 9E +
-Delta-marketed SkyWest OO), rebuilds the embedded dataset, and regenerates
-index.html from template.html.
+Downloads the latest BTS T-100 Segment data (every US mainline airline plus
+the regional flying attributed to it by marketed share), writes one dataset
+per airline to data/<code>.json, and embeds Delta's into index.html.
 
 Usage:
     python refresh_data.py                  # refresh T-100 loads (typical monthly run)
@@ -37,7 +37,11 @@ UA = {"User-Agent": "Mozilla/5.0 (empty-seats refresh script)"}
 T100_FIELDS = ["UNIQUE_CARRIER", "ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
                "DEST", "DEST_CITY_NAME", "DEST_COUNTRY",
                "DEPARTURES_PERFORMED", "SEATS", "PASSENGERS", "YEAR", "MONTH", "CLASS"]
-SHARE_CSV = ROOT / "data" / "oo_dl_share.csv"
+SHARE_CSV = ROOT / "data" / "op_share.csv"      # op,o,d,mkt,share
+CARRIERS = {"DL": "Delta", "UA": "United", "AA": "American", "WN": "Southwest",
+            "B6": "JetBlue", "AS": "Alaska", "NK": "Spirit", "F9": "Frontier",
+            "G4": "Allegiant", "HA": "Hawaiian"}
+DATA_DIR = ROOT / "data"
 DAYS_CSV = ROOT / "data" / "route_days.csv"
 INTL_CSV = ROOT / "data" / "intl_times.csv"
 COORDS_CSV = ROOT / "data" / "airport_coords.csv"
@@ -77,10 +81,12 @@ def download_t100_year(session: requests.Session, year: int) -> pd.DataFrame | N
     return df
 
 
-def rebuild_skywest_share(session: requests.Session, latest_year: int) -> None:
-    """Rebuild data/oo_dl_share.csv from recent Marketing-Carrier on-time months.
-
-    Samples the most recent January and July available (seasonal coverage).
+def rebuild_op_share(session: requests.Session, latest_year: int) -> None:
+    """Rebuild data/op_share.csv from recent Marketing-Carrier on-time months:
+    for each operating carrier and route, the share of its flights marketed by
+    each mainline. T-100 reports an operator's segment without the marketer, so
+    this is what lets a SkyWest or Republic segment be split between the
+    airlines that sold it. Samples a recent January and July for seasonal cover.
     """
     samples = []
     for (y, m) in [(latest_year, 1), (latest_year - 1, 7), (latest_year - 1, 1)]:
@@ -96,20 +102,19 @@ def rebuild_skywest_share(session: requests.Session, latest_year: int) -> None:
                          usecols=["Marketing_Airline_Network", "Operating_Airline ",
                                   "Origin", "Dest"], dtype=str)
         df.columns = ["mkt", "op", "o", "d"]
-        oo = df[df.op == "OO"]
-        tot = oo.groupby(["o", "d"]).size().rename("tot")
-        dl = oo[oo.mkt == "DL"].groupby(["o", "d"]).size().rename("dl")
-        samples.append(pd.concat([tot, dl], axis=1).fillna(0))
-        print(f"    {len(oo):,} SkyWest flights")
+        df = df[df.mkt.isin(CARRIERS)]
+        samples.append(df.groupby(["op", "o", "d", "mkt"]).size().rename("n"))
+        print(f"    {len(df):,} flights")
         if len(samples) >= 2:
             break
     if not samples:
         print("  WARNING: no on-time data retrieved; keeping existing share table")
         return
-    alls = pd.concat(samples).groupby(level=[0, 1]).sum()
-    alls["share"] = alls.dl / alls.tot
-    alls.to_csv(SHARE_CSV)
-    print(f"  wrote {SHARE_CSV} ({len(alls)} segments)")
+    n = pd.concat(samples).groupby(level=[0, 1, 2, 3]).sum()
+    tot = n.groupby(level=[0, 1, 2]).transform("sum")
+    out = (n / tot).rename("share").reset_index()
+    out.to_csv(SHARE_CSV, index=False)
+    print(f"  wrote {SHARE_CSV} ({len(out)} operator-route-marketer rows)")
 
 
 def _time_banks(minutes: list[int]) -> list[int]:
@@ -170,6 +175,7 @@ def _dep_arr_banks(pairs: list[tuple[int, int]]) -> tuple[list[int], list[int]]:
 
 
 def rebuild_route_days(session, months: list[tuple[int, int]],
+                       ops_by_mkt: dict[str, set[str]],
                        limit: int | None = None) -> None:
     """Incrementally build data/route_days.csv: per-route, per-month day-of-week
     operating masks and normal scheduled departure banks for DL-marketed flights,
@@ -181,7 +187,7 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
     Months already present in the CSV are kept, months outside the window are
     dropped, and only missing months are downloaded (typically one per run).
     """
-    cols = ["o", "d", "ym", "mask", "times", "arrs"]
+    cols = ["mkt", "o", "d", "ym", "mask", "times", "arrs"]
     have = pd.DataFrame(columns=cols)
     if DAYS_CSV.exists():
         old = pd.read_csv(DAYS_CSV)
@@ -210,42 +216,49 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
                          usecols=["FlightDate", "Marketing_Airline_Network",
                                   "Operating_Airline ", "Origin", "Dest",
                                   "CRSDepTime", "CRSArrTime"], dtype=str)
-        # match the T-100 load coverage: DL-marketed AND operated by
-        # mainline/Endeavor/SkyWest (Republic etc. are excluded from loads)
-        df = df[(df.Marketing_Airline_Network == "DL")
-                & (df["Operating_Airline "].isin(["DL", "9E", "OO"]))]
-        t = pd.to_numeric(df.CRSDepTime, errors="coerce")
-        ta = pd.to_numeric(df.CRSArrTime, errors="coerce")
-        dts = pd.to_datetime(df.FlightDate)
-        df = df.assign(dow=dts.dt.dayofweek, day=dts.dt.day,
-                       mins=(t // 100) % 24 * 60 + t % 100,
-                       amins=(ta // 100) % 24 * 60 + ta % 100)
         import calendar
         occ = [0] * 7
         for dnum in range(1, calendar.monthrange(y, m)[1] + 1):
             occ[calendar.weekday(y, m, dnum)] += 1
-        srv = df.groupby(["Origin", "Dest", "dow"]).day.nunique().reset_index()
-        srv = srv[[c >= 0.5 * occ[w] for c, w in zip(srv.day, srv.dow)]]
-        masks = srv.groupby(["Origin", "Dest"]).dow.apply(
-            lambda s: sum(1 << int(w) for w in set(s))).rename("mask")
-        tdf = df[df.mins.notna() & df.amins.notna()].copy()
-        tdf["mins"] = tdf.mins.astype(int)
-        tdf["amins"] = tdf.amins.astype(int)
-        banks = tdf.groupby(["Origin", "Dest"]).apply(
-            lambda g: _dep_arr_banks(list(zip(g.mins, g.amins))))
-        times = banks.apply(lambda b: " ".join(str(x) for x in b[0])).rename("times")
-        arrs = banks.apply(lambda b: " ".join(str(x) for x in b[1])).rename("arrs")
-        add = pd.concat([masks, times, arrs], axis=1).reset_index()
-        add.columns = ["o", "d", "mask", "times", "arrs"]
-        add["mask"] = add["mask"].fillna(0).astype(int)
-        add["times"] = add.times.fillna("")
-        add["arrs"] = add.arrs.fillna("")
-        add["ym"] = f"{y}-{m:02d}"
+        adds = []
+        for mkt, ops in ops_by_mkt.items():
+            # match the T-100 load coverage: marketed by this airline AND flown
+            # by it or a regional the share table attributes to it
+            sub = df[(df.Marketing_Airline_Network == mkt)
+                     & (df["Operating_Airline "].isin(ops))]
+            if not len(sub):
+                continue
+            t = pd.to_numeric(sub.CRSDepTime, errors="coerce")
+            ta = pd.to_numeric(sub.CRSArrTime, errors="coerce")
+            dts = pd.to_datetime(sub.FlightDate)
+            sub = sub.assign(dow=dts.dt.dayofweek, day=dts.dt.day,
+                             mins=(t // 100) % 24 * 60 + t % 100,
+                             amins=(ta // 100) % 24 * 60 + ta % 100)
+            srv = sub.groupby(["Origin", "Dest", "dow"]).day.nunique().reset_index()
+            srv = srv[[c >= 0.5 * occ[w] for c, w in zip(srv.day, srv.dow)]]
+            masks = srv.groupby(["Origin", "Dest"]).dow.apply(
+                lambda s_: sum(1 << int(w) for w in set(s_))).rename("mask")
+            tdf = sub[sub.mins.notna() & sub.amins.notna()].copy()
+            tdf["mins"] = tdf.mins.astype(int)
+            tdf["amins"] = tdf.amins.astype(int)
+            banks = tdf.groupby(["Origin", "Dest"]).apply(
+                lambda g_: _dep_arr_banks(list(zip(g_.mins, g_.amins))))
+            times = banks.apply(lambda b: " ".join(str(x) for x in b[0])).rename("times")
+            arrs = banks.apply(lambda b: " ".join(str(x) for x in b[1])).rename("arrs")
+            add = pd.concat([masks, times, arrs], axis=1).reset_index()
+            add.columns = ["o", "d", "mask", "times", "arrs"]
+            add["mask"] = add["mask"].fillna(0).astype(int)
+            add["times"] = add.times.fillna("")
+            add["arrs"] = add.arrs.fillna("")
+            add["ym"] = f"{y}-{m:02d}"
+            add["mkt"] = mkt
+            adds.append(add[cols])
+        add = pd.concat(adds, ignore_index=True) if adds else pd.DataFrame(columns=cols)
         frames.append(add[cols])
         done += 1
         print(f"    {len(add)} routes")
     out = pd.concat(frames, ignore_index=True)
-    out = out.sort_values(["ym", "o", "d"])
+    out = out.sort_values(["mkt", "ym", "o", "d"])
     out.to_csv(DAYS_CSV, index=False)
     left = len(missing) - done
     print(f"  route_days.csv: {len(out)} rows, "
@@ -458,8 +471,8 @@ def rebuild_only() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--refresh-skywest", action="store_true",
-                    help="also rebuild the SkyWest->Delta attribution table")
+    ap.add_argument("--refresh-share", "--refresh-skywest", action="store_true",
+                    help="also rebuild the operator->marketer attribution table")
     ap.add_argument("--rebuild-only", action="store_true",
                     help="re-render index.html from template.html, reusing the data "
                          "already embedded in index.html; downloads nothing")
@@ -491,74 +504,94 @@ def main() -> int:
     lo_key = latest_year * 12 + latest_month - 35
     df = df[(df.YEAR * 12 + df.MONTH) >= lo_key]
 
-    if args.refresh_skywest:
-        print("Rebuilding SkyWest attribution ...")
-        rebuild_skywest_share(session, latest_year)
+    if args.refresh_share or not SHARE_CSV.exists():
+        print("Rebuilding operator attribution ...")
+        rebuild_op_share(session, latest_year)
+    share = pd.read_csv(SHARE_CSV)
+    ops_by_mkt = {c: set(share[share.mkt == c].op) | {c} for c in CARRIERS}
 
-    share = pd.read_csv(SHARE_CSV).set_index(["o", "d"])["share"].to_dict()
-
-    dl9e = df[df.UNIQUE_CARRIER.isin(["DL", "9E"])].copy()
-    dl9e["w"] = 1.0
-    oo = df[df.UNIQUE_CARRIER == "OO"].copy()
-    oo["w"] = [share.get((o, d), 0.0) for o, d in zip(oo.ORIGIN, oo.DEST)]
-    oo = oo[oo.w >= 0.05]
-    sub = pd.concat([dl9e, oo])
-    for c in ["DEPARTURES_PERFORMED", "SEATS", "PASSENGERS"]:
-        sub[c] = sub[c] * sub.w
-
-    g = sub.groupby(["UNIQUE_CARRIER", "ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
-                     "DEST", "DEST_CITY_NAME", "DEST_COUNTRY", "YEAR", "MONTH"],
-                    as_index=False).agg(dep=("DEPARTURES_PERFORMED", "sum"),
-                                        seats=("SEATS", "sum"),
-                                        pax=("PASSENGERS", "sum"))
-    g = g[g.dep >= 0.5]
-    print(f"Route-month rows: {len(g):,}")
+    # each airline's network: its own metal at full weight plus every regional
+    # segment weighted by the share of it that airline marketed
+    nets: dict[str, pd.DataFrame] = {}
+    for c in CARRIERS:
+        own = df[df.UNIQUE_CARRIER == c].copy()
+        own["w"] = 1.0
+        sh = share[(share.mkt == c) & (share.op != c)]
+        reg = df[df.UNIQUE_CARRIER.isin(set(sh.op))].merge(
+            sh[["op", "o", "d", "share"]].rename(columns={"share": "w"}),
+            left_on=["UNIQUE_CARRIER", "ORIGIN", "DEST"], right_on=["op", "o", "d"])
+        reg = reg[reg.w >= 0.05].drop(columns=["op", "o", "d"])
+        sub = pd.concat([own, reg])
+        if not len(sub):
+            continue
+        for col in ["DEPARTURES_PERFORMED", "SEATS", "PASSENGERS"]:
+            sub[col] = sub[col] * sub.w
+        g = sub.groupby(["ORIGIN", "ORIGIN_CITY_NAME", "ORIGIN_COUNTRY",
+                         "DEST", "DEST_CITY_NAME", "DEST_COUNTRY", "YEAR", "MONTH"],
+                        as_index=False).agg(dep=("DEPARTURES_PERFORMED", "sum"),
+                                            seats=("SEATS", "sum"),
+                                            pax=("PASSENGERS", "sum"))
+        g = g[g.dep >= 0.5]
+        if len(g):
+            nets[c] = g
+        print(f"  {c}: {len(g):,} route-month rows")
+    if "DL" not in nets:
+        print("ERROR: no Delta rows"); return 1
 
     ap_lookup: dict[str, tuple[str, str]] = {}
-    for _, r in g.iterrows():
-        ap_lookup.setdefault(r.ORIGIN, (r.ORIGIN_CITY_NAME, r.ORIGIN_COUNTRY))
-        ap_lookup.setdefault(r.DEST, (r.DEST_CITY_NAME, r.DEST_COUNTRY))
-    codes = sorted(ap_lookup)
-    idx = {c: i for i, c in enumerate(codes)}
-    airports = [[c, ap_lookup[c][0], ap_lookup[c][1]] for c in codes]
-    car = {"DL": 0, "9E": 1, "OO": 2}
-    rows = [[idx[r.ORIGIN], idx[r.DEST], int(r.YEAR), int(r.MONTH),
-             int(round(r.dep)), int(round(r.seats)), int(round(r.pax)),
-             car[r.UNIQUE_CARRIER]] for _, r in g.iterrows()]
+    for g in nets.values():
+        for _, r in g.iterrows():
+            ap_lookup.setdefault(r.ORIGIN, (r.ORIGIN_CITY_NAME, r.ORIGIN_COUNTRY))
+            ap_lookup.setdefault(r.DEST, (r.DEST_CITY_NAME, r.DEST_COUNTRY))
+    all_codes = set(ap_lookup)
 
-    window_months = sorted({(int(y), int(mo)) for y, mo in zip(g.YEAR, g.MONTH)})
-    print("Rebuilding operating-days table ...")  # window_months set above
-    rebuild_route_days(session, window_months)
+    window_months = sorted({(int(y), int(mo)) for g in nets.values()
+                            for y, mo in zip(g.YEAR, g.MONTH)})
+    print("Rebuilding operating-days table ...")
+    rebuild_route_days(session, window_months, ops_by_mkt)
 
     print("Refreshing airport coordinates ...")
-    rebuild_coords(session, set(codes))
+    rebuild_coords(session, all_codes)
 
     print("Refreshing IANA time zones ...")
     try:
-        rebuild_iana(session, set(codes))
+        rebuild_iana(session, all_codes)
     except Exception as e:
         print(f"  IANA zone refresh failed: {e}")
 
     print("Refreshing international departure times ...")
     try:
-        rebuild_intl_times(g, ap_lookup)
+        rebuild_intl_times(nets["DL"], ap_lookup)   # sampled for Delta only
     except Exception as e:  # never let intl times break the build
         print(f"  intl times failed: {e}")
 
     dm = [f"{y}-{mo:02d}" for y, mo in window_months]
-    dmi = {s: i for i, s in enumerate(dm)}
-    days: dict[str, list[int]] = {}
-    times: dict[str, list] = {}
-    if DAYS_CSV.exists():
-        dd = pd.read_csv(DAYS_CSV)
+    dmi = {s_: i for i, s_ in enumerate(dm)}
+    dd = pd.read_csv(DAYS_CSV) if DAYS_CSV.exists() else pd.DataFrame(
+        columns=["mkt", "o", "d", "ym", "mask", "times", "arrs"])
+    ii = pd.read_csv(IANA_CSV) if IANA_CSV.exists() else pd.DataFrame(columns=["code", "tz"])
+    cc = pd.read_csv(COORDS_CSV) if COORDS_CSV.exists() else pd.DataFrame(columns=["code", "lat", "lon"])
+    it = pd.read_csv(INTL_CSV) if INTL_CSV.exists() else pd.DataFrame(
+        columns=["o", "d", "mask", "times", "asof"])
+
+    import json
+    written = []
+    for c, g in nets.items():
+        codes = sorted(set(g.ORIGIN) | set(g.DEST))
+        idx = {code: i for i, code in enumerate(codes)}
+        airports = [[code, ap_lookup[code][0], ap_lookup[code][1]] for code in codes]
+        rows = [[idx[r.ORIGIN], idx[r.DEST], int(r.YEAR), int(r.MONTH),
+                 int(round(r.dep)), int(round(r.seats)), int(round(r.pax)), 0]
+                for _, r in g.iterrows()]
         route_set = set(zip(g.ORIGIN, g.DEST))
-        has_t = "times" in dd.columns
-        tmp_d: dict[tuple[str, str], list[int]] = {}
-        tmp_t: dict[tuple[str, str], list] = {}
-        tmp_a: dict[tuple[str, str], list] = {}
-        tvals = dd.times if has_t else [""] * len(dd)
-        avals = dd.arrs if "arrs" in dd.columns else [""] * len(dd)
-        for o, d, ym, mk, tv, av in zip(dd.o, dd.d, dd.ym, dd["mask"], tvals, avals):
+
+        days: dict[str, list[int]] = {}
+        times: dict[str, list] = {}
+        arrivals: dict[str, list] = {}
+        tmp_d: dict = {}; tmp_t: dict = {}; tmp_a: dict = {}
+        sub = dd[dd.mkt == c] if "mkt" in dd.columns else dd.iloc[0:0]
+        for o, d, ym, mk, tv, av in zip(sub.o, sub.d, sub.ym, sub["mask"],
+                                        sub.times, sub.arrs):
             if (o, d) not in route_set or ym not in dmi:
                 continue
             tmp_d.setdefault((o, d), [0] * len(dm))[dmi[ym]] = int(mk)
@@ -574,63 +607,55 @@ def main() -> int:
                 if any(0 < v < 127 for v in arr)}
         times = {f"{o}-{d}": arr for (o, d), arr in tmp_t.items()}
         arrivals = {f"{o}-{d}": arr for (o, d), arr in tmp_a.items()}
-    print(f"Embedded: {len(days)} day-limited routes, {len(times)} routes with times, "
-          f"{len(arrivals)} with arrival times")
 
-    intl_times: dict[str, list[int]] = {}
-    if INTL_CSV.exists():
-        it = pd.read_csv(INTL_CSV)
-        rset = set(zip(g.ORIGIN, g.DEST))
-        imasks = it["mask"] if "mask" in it.columns else [0] * len(it)
-        for o, d, tv, mk in zip(it.o, it.d, it.times, imasks):
-            tv = str(tv).strip()
-            if (o, d) in rset and tv and tv != "nan":
-                try:
-                    mkv = int(mk)
-                except (TypeError, ValueError):
-                    mkv = 0
-                intl_times[f"{o}-{d}"] = [mkv] + [int(x) for x in tv.split()]
-    intl_meta = {"label": "", "sampled": []}
-    if INTL_CSV.exists():
-        it2 = pd.read_csv(INTL_CSV)
-        if len(it2):
-            latest = str(it2["asof"].max())
+        intl_times: dict[str, list[int]] = {}
+        intl_meta = {"label": "", "sampled": []}
+        if c == "DL" and len(it):
+            imasks = it["mask"] if "mask" in it.columns else [0] * len(it)
+            for o, d, tv, mk in zip(it.o, it.d, it.times, imasks):
+                tv = str(tv).strip()
+                if (o, d) in route_set and tv and tv != "nan":
+                    try:
+                        mkv = int(mk)
+                    except (TypeError, ValueError):
+                        mkv = 0
+                    intl_times[f"{o}-{d}"] = [mkv] + [int(x) for x in tv.split()]
+            latest = str(it["asof"].max())
             try:
                 ad = dt.date.fromisoformat(latest)
                 mons = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                         "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
                 intl_meta["label"] = f"{mons[ad.month-1]} \u2019{str(ad.year)[2:]}"
-                intl_meta["sampled"] = sorted(set(it2[it2["asof"] == latest].o))
+                intl_meta["sampled"] = sorted(set(it[it["asof"] == latest].o))
             except ValueError:
                 pass
-    print(f"International times embedded: {len(intl_times)} "
-          f"(sampled origins: {len(intl_meta['sampled'])})")
 
-    iana: dict[str, str] = {}
-    if IANA_CSV.exists():
-        ii = pd.read_csv(IANA_CSV)
-        iana = {c: str(z) for c, z in zip(ii.code, ii.tz)
-                if c in idx and isinstance(z, str) and "/" in z}
+        iana = {code: str(z) for code, z in zip(ii.code, ii.tz)
+                if code in idx and isinstance(z, str) and "/" in z}
+        coords = {code: [float(la), float(lo)]
+                  for code, la, lo in zip(cc.code, cc.lat, cc.lon) if code in idx}
 
-    coords: dict[str, list[float]] = {}
-    if COORDS_CSV.exists():
-        cc = pd.read_csv(COORDS_CSV)
-        coords = {c: [float(la), float(lo)]
-                  for c, la, lo in zip(cc.code, cc.lat, cc.lon) if c in idx}
-
-    import json
-    payload = json.dumps({"airports": airports, "rows": rows, "coords": coords,
-                          "days": days, "dm": dm, "times": times, "arrs": arrivals,
-                          "intlTimes": intl_times, "intlMeta": intl_meta,
-                          "tzn": iana},
-                         separators=(",", ":"))
-    template = TEMPLATE.read_text()
-    if PLACEHOLDER not in template:
-        print("ERROR: template.html missing data placeholder"); return 1
-    OUTPUT.write_text(template.replace(PLACEHOLDER, payload))
-    print(f"Wrote {OUTPUT} ({OUTPUT.stat().st_size/1e6:.2f} MB), "
-          f"{len(airports)} airports, 36-month window ending "
-          f"{latest_year}-{latest_month:02d}")
+        payload = json.dumps({"carrier": {"code": c, "name": CARRIERS[c]},
+                              "airports": airports, "rows": rows, "coords": coords,
+                              "days": days, "dm": dm, "times": times, "arrs": arrivals,
+                              "intlTimes": intl_times, "intlMeta": intl_meta,
+                              "tzn": iana},
+                             separators=(",", ":"))
+        (DATA_DIR / f"{c}.json").write_text(payload)
+        written.append({"code": c, "name": CARRIERS[c], "airports": len(airports),
+                        "routeMonths": len(rows)})
+        print(f"  wrote data/{c}.json ({len(payload)/1e6:.2f} MB, "
+              f"{len(airports)} airports, {len(days)} day-limited routes, "
+              f"{len(times)} with times)")
+        if c == "DL":
+            template = TEMPLATE.read_text()
+            if PLACEHOLDER not in template:
+                print("ERROR: template.html missing data placeholder"); return 1
+            OUTPUT.write_text(template.replace(PLACEHOLDER, payload))
+            print(f"Wrote {OUTPUT} ({OUTPUT.stat().st_size/1e6:.2f} MB)")
+    (DATA_DIR / "carriers.json").write_text(json.dumps(written, separators=(",", ":")))
+    print(f"36-month window ending {latest_year}-{latest_month:02d}; "
+          f"{len(written)} airlines")
     return 0
 
 
