@@ -549,14 +549,23 @@ def main() -> int:
         rebuild_op_share(session, latest_year)
     share = pd.read_csv(SHARE_CSV)
     ops_by_mkt = {c: set(share[share.mkt == c].op) | {c} for c in CARRIERS}
+    print("  exclusive regionals: " + ", ".join(
+        f"{op}->{m}" for op, m in sorted(share.groupby("op").mkt.apply(set).items())
+        if len(m) == 1 and op not in CARRIERS))
 
     # each airline's network: its own metal at full weight plus every regional
     # segment weighted by the share of it that airline marketed
+    # an operator seen under exactly one marketer is that airline's own regional
+    # (Endeavor, Envoy, Horizon ...): full weight on every route, including the
+    # international ones the domestic on-time data cannot give a share for
+    marketers_of = share.groupby("op").mkt.apply(set)
+    exclusive = {op: next(iter(m)) for op, m in marketers_of.items() if len(m) == 1}
     nets: dict[str, pd.DataFrame] = {}
     for c in CARRIERS:
-        own = df[df.UNIQUE_CARRIER == c].copy()
+        own_ops = {c} | {op for op, m in exclusive.items() if m == c}
+        own = df[df.UNIQUE_CARRIER.isin(own_ops)].copy()
         own["w"] = 1.0
-        sh = share[(share.mkt == c) & (share.op != c)]
+        sh = share[(share.mkt == c) & ~share.op.isin(own_ops)]
         reg = df[df.UNIQUE_CARRIER.isin(set(sh.op))].merge(
             sh[["op", "o", "d", "share"]].rename(columns={"share": "w"}),
             left_on=["UNIQUE_CARRIER", "ORIGIN", "DEST"], right_on=["op", "o", "d"])

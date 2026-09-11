@@ -88,4 +88,11 @@ jobs:
           assert row("DL","LHR","BOS").times == 1120 and row("DL","LHR","BOS").arrs == 1355, "foreign-origin leg from the arrivals board"
           assert not len(it[it.mkt=="XX"]), "unknown airline dropped"
           print("intl sampler: both boards, both legs, every airline, one call per window;", len(calls), "calls")
+
+          # ---- exclusive regional keeps international routes the share table cannot see ----
+          sh2 = pd.DataFrame({"op":["9E","OO","OO"],"o":["LGA","MSP","MSP"],"d":["BOS","RST","RST"],"mkt":["DL","DL","UA"],"share":[1.0,0.66,0.34]})
+          m_of = sh2.groupby("op").mkt.apply(set)
+          excl = {op: next(iter(m)) for op, m in m_of.items() if len(m)==1}
+          assert excl == {"9E": "DL"}, excl
+          print("exclusivity: 9E->DL only; SkyWest split, stays share-weighted")
           PY
