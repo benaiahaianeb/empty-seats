@@ -330,8 +330,10 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
                     except requests.RequestException as e:
                         print(f"    {gw} {day}: {e}")
                         break
-                    if r.status_code in (401, 403) and ok_calls == 0:
-                        print(f"    host {host} rejected key; trying next")
+                    if r.status_code != 200 and ok_calls == 0:
+                        # nothing has worked yet: say why, then try the next host
+                        print(f"    host {host} refused the first call: HTTP {r.status_code} "
+                              f"{r.text[:200].strip()!r}; trying next")
                         hi += 1
                         continue
                     if r.status_code != 200:
@@ -340,6 +342,10 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
                     data = r.json()
                     break
                 if data is None:
+                    if hi >= len(hosts):
+                        print("  every host refused the key; keeping existing intl_times.csv "
+                              "(check the AERODATABOX_KEY secret and its subscription)")
+                        return
                     continue
                 ok_calls += 1
                 for board in ("departures", "arrivals"):
