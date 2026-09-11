@@ -1047,17 +1047,12 @@ function computeAlts(){
       for(const o of options) o.arr=earliestArrival(o.legs, sdi);
       const usable=options.filter(o=> o.legs.length===1 || o.arr!==null
                                       || !legsHaveArrivals(o.legs, sdi));
-      if(!usable.length) continue;
-      usable.sort((a,b)=>b.bn-a.bn);
-      let best=usable[0];
-      for(let k=1;k<=3;k++){ // prefer the fewest stops that stays within 5 open seats
-        const cand=usable.find(o=>o.legs.length===k);
-        if(cand && cand.bn >= best.bn-5){ best=cand; break; }
-      }
-      list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi,
-                 legs:best.legs, bn:best.bn, arr:best.arr,
-                 m:best.legs.length===1? best.legs[0].m : null,
-                 worstLf:Math.max(...best.legs.map(l=>l.m.lf)),
+      // every routing is its own row: picking one winner per pair hid the
+      // nonstop whenever a detour had a few more open seats
+      for(const b of usable) list.push({o:no.code, d:nd.code, om:no.mi, dm2:nd.mi,
+                 legs:b.legs, bn:b.bn, arr:b.arr,
+                 m:b.legs.length===1? b.legs[0].m : null,
+                 worstLf:Math.max(...b.legs.map(l=>l.m.lf)),
                  orig:no.code===O && nd.code===D});
     }
   }
@@ -1126,7 +1121,7 @@ function renderAlts(){
       if(r.om>0) tags+='<span class="tag">'+r.o+" · "+Math.round(r.om)+" mi away</span>";
       if(r.dm2>0) tags+='<span class="tag">'+r.d+" · "+Math.round(r.dm2)+" mi away</span>";
     }
-    const akey=r.o+"-"+r.d, isOpen=state.altOpen===akey;
+    const akey=r.legs.map(l=>l.f).concat(r.d).join("-"), isOpen=state.altOpen===akey;
     html+='<div class="rowbtn altrow'+(r.orig?" orig":"")+'" data-akey="'+akey+'" role="button" tabindex="0" aria-expanded="'+isOpen+'">'
       +'<span class="dcode altcode">'+r.o+'→'+r.d+'</span>'
       +'<span class="dcity">'+esc(co[1])+' → '+esc(cd[1])+tags+"</span>";
