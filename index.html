@@ -1082,7 +1082,8 @@ function legTimesHTML(f, t, dmi){
       + (est? ' <span class="na">'+esc(est)+"</span>"
             : ' <span class="na">(departures only)</span>');
   }
-  return '<div class="legrow"><b>'+f+" → "+t+"</b>"
+  const place=c=>{ const i=CODE_IDX.get(c); return i==null? c : c+' <span class="dim">'+esc(A[i][1])+"</span>"; };
+  return '<div class="legrow"><b>'+place(f)+" → "+place(t)+"</b>"
     +(note? '<span class="dim">'+note+"</span>" : "")
     +'<div class="legtimes">'+times+"</div></div>";
 }
