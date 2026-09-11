@@ -293,7 +293,7 @@
               <button id="spanAvg">3-year average</button>
             </span>
             <span class="chip-cap">Schedule</span>
-            <span class="modeswitch" id="schedSwitch">
+            <span class="modeswitch">
               <button id="schedNewest" class="on">Newest</button>
               <button id="schedSeasonal">Seasonal</button>
             </span>
@@ -568,15 +568,9 @@ function currentDaysIdx(){
 // line names the month it came from, so neither reads as live data.
 const NEWEST_DMI = (DATA.dm||[]).length-1;
 function schedIdx(){ return state.sched==="newest"? NEWEST_DMI : currentDaysIdx(); }
-function dmLabel(i){
-  const t=(DATA.dm||[])[i];
-  if(!t) return "";
-  const p=t.split("-");
-  return MONTH_FULL[+p[1]-1]+" "+p[0];
-}
 function schedNote(){
-  const i=schedIdx();
-  return i>=0? " · schedule from "+dmLabel(i) : "";
+  const t=(DATA.dm||[])[schedIdx()];
+  return t? " · schedule from "+MONTH_FULL[+t.slice(5,7)-1]+" "+t.slice(0,4) : "";
 }
 
 // planning tool: hide flights that can no longer be taken.
