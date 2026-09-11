@@ -42,7 +42,7 @@
   .themebtn{font:inherit;font-size:12px;font-weight:500;color:var(--primary);background:none;border:none;cursor:pointer;padding:2px 0}
 
   .controls{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);padding:16px;
-    display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);gap:16px}
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
   @media(max-width:760px){.controls{grid-template-columns:1fr}}
   .ctl-label{font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:flex;align-items:center;
     gap:10px;flex-wrap:wrap;row-gap:8px;min-width:0}
@@ -111,9 +111,6 @@
   @media(max-width:640px){.optpanel{position:fixed;left:16px;right:16px;width:auto;
     top:auto;bottom:16px;max-height:75vh;overflow:auto}}
   .spacer{flex:1}
-  .dest-search{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);color:var(--text);font-size:14px;
-    padding:6px 10px;outline:none;width:190px}
-  .dest-search:focus{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
 
   .summary{margin:20px 2px 8px;font-size:16px;color:var(--text-secondary)}
   .summary strong{color:var(--text);font-weight:500}
@@ -125,14 +122,6 @@
   .vtab.on{color:var(--primary);border-bottom-color:var(--primary)}
 
   .board{background:var(--surface);border:1px solid var(--divider);border-radius:var(--radius);overflow:hidden;margin-top:8px}
-  .thead{display:grid;grid-template-columns:92px 1fr 200px 210px 110px;gap:0;align-items:center;
-    padding:0 16px;height:40px;border-bottom:1px solid var(--divider);background:var(--surface)}
-  .th{font:inherit;font-size:12px;font-weight:500;color:var(--text-secondary);
-    cursor:pointer;user-select:none;background:none;border:none;text-align:left;padding:0}
-  .th:hover{color:var(--text)}
-  .th.right{text-align:right}
-  .th.active{color:var(--primary)}
-  .th .arr{font-size:10px}
 
   .rowbtn{width:100%;display:grid;grid-template-columns:92px 1fr 200px 210px 110px;align-items:center;
     padding:10px 16px;border:none;border-bottom:1px solid var(--divider);background:var(--surface);color:var(--text);cursor:pointer;text-align:left;
@@ -146,7 +135,6 @@
   .sched b{font-weight:500}
   .sched.irr b{font-weight:400;color:var(--text-secondary)}
   .sched small{display:block;font-size:12px;color:var(--text-secondary);margin-top:1px}
-  .sched .noflying{color:var(--text-secondary)}
   .arrline{font-size:11px;color:var(--text-secondary)}
   .legs .arrline{flex-basis:100%;margin-top:2px}
   .altcode{font-size:13px !important}
@@ -170,31 +158,13 @@
   .opennum small{display:block;font-family:var(--font);font-weight:400;font-size:11px;color:var(--text-secondary)}
   .opennum .mcap{display:none}
 
-  .season{border-bottom:1px solid var(--divider);background:var(--bg);padding:16px 20px 20px;display:none}
-  .season.open{display:block}
-  .season h4{font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:12px}
-  .season h4 b{color:var(--text);font-weight:500}
-  .strip{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;align-items:end}
-  .mcell{text-align:center}
-  .mbar{position:relative;height:80px;background:var(--surface);border:1px solid var(--divider);border-radius:2px;overflow:hidden;margin-bottom:6px}
-  .mbar .bf{position:absolute;left:0;right:0;bottom:0}
-  .mbar.best{border-color:var(--success-text)}
-  .mbar.sel{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
-  .mbar.na{opacity:.35}
-  .mlab{font-size:12px;color:var(--text-secondary)}
-  .mlab i{font-style:normal;font-size:10px;color:var(--text-secondary);display:block}
-  .mval{font-variant-numeric:tabular-nums;font-size:12px;color:var(--text)}
-  .mval small{display:block;font-size:10px;color:var(--text-secondary)}
-  .mval .mdays{font-size:10px;color:var(--text-secondary);margin-top:1px}
   @media(max-width:860px){
-    .thead{display:none}
     .opennum .mcap{display:block}
     .rowbtn{grid-template-columns:70px 1fr 100px;grid-template-areas:"code city open" "sched sched sched" "gauge gauge gauge";row-gap:8px}
     .dcode{grid-area:code}.dcity{grid-area:city}.opennum{grid-area:open}
     .sched{grid-area:sched;padding:0}
     .altrow .legs{grid-area:sched}
     .gauge{grid-area:gauge;padding:0}
-    .strip{grid-template-columns:repeat(6,1fr);row-gap:12px}
   }
 
   .empty{padding:32px 20px;text-align:center;color:var(--text-secondary);font-size:14px}
@@ -225,31 +195,20 @@
 
   <div class="controls">
     <div>
-      <label class="ctl-label" for="originInput" id="originLabel">Departing from</label>
+      <label class="ctl-label" for="originInput">From</label>
       <div class="origin-box">
-        <input id="originInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Type airport or city…">
+        <input id="originInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Any airport">
         <div id="originMenu" class="origin-menu" role="listbox"></div>
       </div>
     </div>
-    <div id="destCell">
-      <label class="ctl-label" for="destSearch">Filter destinations</label>
-      <input class="dest-search" id="destSearch" placeholder="Airport, city or country…">
+    <div>
+      <label class="ctl-label" for="destInput">To</label>
+      <div class="origin-box">
+        <input id="destInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Any airport">
+        <div id="destMenu" class="origin-menu" role="listbox"></div>
+      </div>
     </div>
     <div class="filters">
-      <div class="chip-group" id="geoGroup">
-        <span class="chip-cap">Show</span>
-        <button class="chip on" data-geo="all">All</button>
-        <button class="chip" data-geo="dom">Domestic</button>
-        <button class="chip" data-geo="intl">International</button>
-      </div>
-      <div class="chip-group" id="freqGroup">
-        <span class="chip-cap">Frequency</span>
-        <button class="chip" data-minf="0">Any</button>
-        <button class="chip on" data-minf="0.12">1×/week+</button>
-        <button class="chip" data-minf="0.5">½ daily+</button>
-        <button class="chip" data-minf="1">Daily+</button>
-        <button class="chip" data-minf="3">3×/day+</button>
-      </div>
       <div class="chip-group" id="contGroup" style="display:none">
         <span class="chip-cap">Continent</span>
         <button class="chip on" data-cont="all">All</button>
@@ -273,11 +232,6 @@
         <button class="chip" data-area="other">Everything else</button>
       </div>
       <div class="chip-group" id="altGroup" style="display:none">
-        <span class="chip-cap">To</span>
-        <div class="origin-box" style="width:210px">
-          <input id="destInput" class="origin-input" autocomplete="off" spellcheck="false" placeholder="Airport or city" style="font-size:13px;padding:6px 10px">
-          <div id="destMenu" class="origin-menu" role="listbox"></div>
-        </div>
         <span class="chip-cap">Day</span>
         <div class="chip-group" id="dowGroup"></div>
         <span class="chip-cap">Stops</span>
@@ -307,6 +261,7 @@
           <button class="chip" data-radt="100">100</button>
           <button class="chip" data-radt="250">250</button>
           <button class="chip" data-radt="500">500 mi</button>
+          <button class="chip" data-radt="Infinity">Anywhere</button>
         </div>
       </div>
       <div class="spacer"></div>
@@ -357,21 +312,13 @@
   </div>
 
   <div class="viewtabs">
-    <button class="vtab on" id="tabBoard">Departure board</button>
+    <button class="vtab on" id="tabAlt">Flight finder</button>
     <button class="vtab" id="tabTrip">Trip finder</button>
-    <button class="vtab" id="tabAlt">Alternatives</button>
   </div>
 
   <div class="summary" id="summary"></div>
 
   <div class="board">
-    <div class="thead">
-      <button class="th" data-sort="code">Dest</button>
-      <span class="th">City</span>
-      <button class="th" data-sort="fpd">Schedule <span class="arr"></span></button>
-      <button class="th" data-sort="lf" style="padding-left:14px">Cabin fill (load factor) <span class="arr"></span></button>
-      <button class="th right active" data-sort="open">Open/flight <span class="arr">▼</span></button>
-    </div>
     <div id="rows"></div>
   </div>
 
@@ -497,8 +444,8 @@ const CODE_IDX = new Map(A.map((a,i)=>[a[0],i]));
 // ---- state ----
 let state = {
   origin:null, mode:"month", month:null, week:0,
-  geo:"all", minFpd:0.12, cars:new Set([0,1,2]), view:"board", cont:"all", naArea:"all", gemsOnly:false, tripOpen:null,
-  destFilter:"", sort:"open", dir:-1, expanded:null, altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
+  cars:new Set([0,1,2]), view:"alt", cont:"all", naArea:"all", gemsOnly:false, tripOpen:null,
+  altDest:null, span:"latest", sched:"newest", altDow:-1, altRadFrom:null, altRadTo:null, altSort:"open", altStops:1, altIntl:false, altOpen:null
 };
 {
   const defo = A.findIndex(a=>a[0]==="BOS");
@@ -754,12 +701,14 @@ function distMi(a, b){
 // once a radius is clicked that choice sticks and changing airports no longer
 // moves it.
 const defaultRad = code => (ALT_EXTRA[code] && ALT_EXTRA[code].length)? 50 : 0;
+// A blank airport means anywhere, whatever the radius chip says.
 function radFrom(){
+  if(state.origin==null) return Infinity;
   return state.altRadFrom!=null? state.altRadFrom : defaultRad(A[state.origin][0]);
 }
 function radTo(){
-  if(state.altRadTo!=null) return state.altRadTo;
-  return state.altDest==null? 0 : defaultRad(A[state.altDest][0]);
+  if(state.altDest==null) return Infinity;
+  return state.altRadTo!=null? state.altRadTo : defaultRad(A[state.altDest][0]);
 }
 function syncRadChips(){
   const set=(g,attr,v)=>{
@@ -771,6 +720,7 @@ function syncRadChips(){
   set("radToGroup","radt",radTo());
 }
 function nearbyCodes(code, miles){
+  if(code==null) return A.map(a=>({code:a[0], mi:0})); // anywhere
   const lim = miles;
   const out=[{code, mi:0}];
   for(const a of A){
@@ -975,8 +925,8 @@ function connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF){
 }
 
 function computeAlts(){
-  if(state.altDest==null) return null;
-  const O=A[state.origin][0], D=A[state.altDest][0];
+  const O=state.origin==null? null : A[state.origin][0];
+  const D=state.altDest==null? null : A[state.altDest][0];
   // dmi = the viewed month, which decides whether a route still exists at all.
   // sdi = the schedule month, which decides what days and times it runs.
   const dmi=currentDaysIdx(), sdi=schedIdx(), dow=state.altDow;
@@ -986,11 +936,9 @@ function computeAlts(){
   // An airport you could simply drive to is not a connection. Flying into an
   // airport inside your own departure radius means backtracking past it (RST ->
   // MSP when you are at MSP); connecting inside the destination radius means
-  // flying past a landing point you already accept.
-  // An airport you could simply drive to is not a connection. Flying into an
-  // airport inside your own departure radius means backtracking past it (RST ->
-  // MSP when you are at MSP); connecting inside the destination radius means
-  // flying past a landing point you already accept.
+  // flying past a landing point you already accept. Anywhere on either side
+  // therefore means nonstops only: with every airport an acceptable start or
+  // landing, connecting through one never beats using it directly.
   const fromSet=new Set(froms.map(x=>x.code)), toSet=new Set(tos.map(x=>x.code));
   const {viaOK, circuityOK, serOf, legMetric} = connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF);
 
@@ -1115,21 +1063,16 @@ function renderAlts(){
   const cont=document.getElementById("rows");
   const sum=document.getElementById("summary");
   syncRadChips(); // the effective radius follows the airport until one is picked
-  const oa=A[state.origin];
+  const oc = state.origin==null? "anywhere" : A[state.origin][0];
+  const dc = state.altDest==null? "anywhere" : A[state.altDest][0];
   const isWeek=state.mode==="week";
   const whenTxt = whenText();
   const list=computeAlts();
-  if(list==null){
-    sum.innerHTML="<strong>Alternatives</strong> from "+oa[0]+" · pick a destination";
-    cont.innerHTML='<div class="empty">Type a destination airport in the <b>To</b> box above.</div>';
-    return;
-  }
-  const D=A[state.altDest];
   const dayTxt = state.altDow<0? "any day" : DOW_FULL[state.altDow];
-  sum.innerHTML="<strong>"+list.length+(list.length===1?" option":" options")+"</strong> "+oa[0]+" → "+D[0]
+  sum.innerHTML="<strong>"+list.length+(list.length===1?" flight":" flights")+"</strong> "+oc+" → "+dc
     +" · "+dayTxt+" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"")
-    +" · "+(radFrom()===0? oa[0]+" only" : radFrom()===Infinity? "from anywhere" : "departure radius "+radFrom()+" mi")
-    +", "+(radTo()===0? D[0]+" only" : "destination radius "+radTo()+" mi")
+    +" · "+(radFrom()===0? oc+" only" : radFrom()===Infinity? "from anywhere" : "departure radius "+radFrom()+" mi")
+    +", "+(radTo()===0? dc+" only" : radTo()===Infinity? "to anywhere" : "destination radius "+radTo()+" mi")
     +(state.altStops===0? " · nonstop only" : " · up to "+state.altStops+(state.altStops===1?" stop":" stops"))
     +(state.altIntl? " · international connections included" : "")
     +(state.altSort==="arr"? " · earliest arrival first" : " · ranked by open seats");
@@ -1244,8 +1187,13 @@ function computeTrips(){
 }
 
 function renderTrips(){
-  const list = computeTrips();
   const cont = document.getElementById("rows");
+  if(state.origin==null){
+    document.getElementById("summary").innerHTML="<strong>Trip ideas</strong> · pick a From airport";
+    cont.innerHTML='<div class="empty">Trip ideas need a departure airport. Type one in the <b>From</b> box.</div>';
+    return;
+  }
+  const list = computeTrips();
   const oa = A[state.origin];
   const isWeek = state.mode==="week";
   const whenTxt = whenText();
@@ -1290,67 +1238,6 @@ function renderTrips(){
   });
 }
 
-function passesGeoFreq(d, m){
-  const ap=A[d], intl=ap[2]!=="US";
-  if(state.geo==="dom" && intl) return false;
-  if(state.geo==="intl" && !intl) return false;
-  if(m.fpd < state.minFpd) return false;
-  return true;
-}
-function buildRow(d, m, extra){
-  const ap=A[d];
-  return Object.assign({d, code:ap[0], city:ap[1], intl:ap[2]!=="US"}, m, extra);
-}
-
-function computeMonth(originIdx, month){
-  const year = latestYearFor(month);
-  const p = PIDX.get(pointKey(year,month));
-  const series = destSeries(originIdx);
-  const dmi = currentDaysIdx(), oCode = A[originIdx][0];
-  const out=[];
-  for(const [d,arr] of series){
-    let m;
-    if(state.span==="avg"){ m = avgMetric(arr, month); }
-    else { const a = arr[p.i]; if(!a || a.dep<1 || a.seats<1) continue; m = metricsAt(a,p); }
-    if(!m) continue;
-    if(!passesGeoFreq(d,m)) continue;
-    if(isDeadRoute(m.fpd, oCode, A[d][0], dmi)) continue;
-    out.push(buildRow(d,m,{year}));
-  }
-  return finish(out);
-}
-
-function computeWeek(originIdx, wi){
-  const t = WEEKS[wi].getTime()+3.5*864e5;
-  // bracket points
-  let i2 = POINTS.findIndex(p=>p.mid>=t);
-  if(i2<0) i2=POINTS.length-1;
-  const i1 = Math.max(0, POINTS[i2].mid===t? i2 : i2-1);
-  const p1=POINTS[i1], p2=POINTS[i2];
-  const f = p2.mid===p1.mid? 0 : (t-p1.mid)/(p2.mid-p1.mid);
-  const series = destSeries(originIdx);
-  const dmi = currentDaysIdx(), oCode = A[originIdx][0];
-  const out=[];
-  for(const [d,arr] of series){
-    const a1=arr[i1], a2=arr[i2];
-    if(!a1 || !a2 || a1.dep<1 || a2.dep<1 || a1.seats<1 || a2.seats<1) continue; // needs service both sides
-    const m1=metricsAt(a1,p1), m2=metricsAt(a2,p2);
-    const m={}; for(const k of ["fpd","spf","lf","open"]) m[k]=m1[k]+(m2[k]-m1[k])*f;
-    if(!passesGeoFreq(d,m)) continue;
-    if(isDeadRoute(m.fpd, oCode, A[d][0], dmi)) continue;
-    out.push(buildRow(d,m,{p1,p2}));
-  }
-  return finish(out);
-}
-
-function finish(out){
-  const q = state.destFilter.trim().toLowerCase();
-  const filtered = q? out.filter(o=>o.code.toLowerCase().includes(q)||o.city.toLowerCase().includes(q)) : out;
-  const dir=state.dir, key=state.sort;
-  filtered.sort((a,b)=> key==="code"? dir*a.code.localeCompare(b.code) : dir*(a[key]-b[key]));
-  return filtered;
-}
-
 // ---- month chips ----
 function renderMonths(){
   const el = document.getElementById("months");
@@ -1361,7 +1248,7 @@ function renderMonths(){
     b.className = "mo"+(state.month===m?" on":"");
     b.disabled=!has; if(!has) b.style.opacity=.3;
     b.innerHTML = MONTH_ABBR[m-1].charAt(0)+MONTH_ABBR[m-1].slice(1).toLowerCase()+'<span class="yr">'+(has? (state.span==="avg"?"avg":"’"+String(latestYearFor(m)).slice(2)) :"—")+"</span>";
-    b.onclick = ()=>{ state.month=m; state.expanded=null; renderMonths(); renderBoard(); };
+    b.onclick = ()=>{ state.month=m; renderMonths(); renderBoard(); };
     el.appendChild(b);
   }
 }
@@ -1376,13 +1263,13 @@ function weekLabel(wi){
 function renderWeekOut(){
   document.getElementById("weekOut").innerHTML = weekLabel(state.week);
 }
-slider.addEventListener("input",()=>{ state.week=+slider.value; state.expanded=null; renderWeekOut(); renderBoard(); });
-document.getElementById("wPrev").onclick=()=>{ if(state.week>0){state.week--; slider.value=state.week; state.expanded=null; renderWeekOut(); renderBoard();} };
-document.getElementById("wNext").onclick=()=>{ if(state.week<WEEKS.length-1){state.week++; slider.value=state.week; state.expanded=null; renderWeekOut(); renderBoard();} };
+slider.addEventListener("input",()=>{ state.week=+slider.value; renderWeekOut(); renderBoard(); });
+document.getElementById("wPrev").onclick=()=>{ if(state.week>0){state.week--; slider.value=state.week; renderWeekOut(); renderBoard();} };
+document.getElementById("wNext").onclick=()=>{ if(state.week<WEEKS.length-1){state.week++; slider.value=state.week; renderWeekOut(); renderBoard();} };
 
 // ---- mode switch ----
 function setMode(m){
-  state.mode=m; state.expanded=null;
+  state.mode=m;
   document.getElementById("modeMonth").classList.toggle("on",m==="month");
   document.getElementById("modeWeek").classList.toggle("on",m==="week");
   document.getElementById("monthPick").classList.toggle("off",m!=="month");
@@ -1393,7 +1280,7 @@ function setMode(m){
 document.getElementById("modeMonth").onclick=()=>setMode("month");
 document.getElementById("modeWeek").onclick=()=>setMode("week");
 function setSpan(sp){
-  state.span=sp; state.expanded=null;
+  state.span=sp;
   document.getElementById("spanLatest").classList.toggle("on",sp==="latest");
   document.getElementById("spanAvg").classList.toggle("on",sp==="avg");
   renderMonths();
@@ -1402,7 +1289,7 @@ function setSpan(sp){
 document.getElementById("spanLatest").onclick=()=>setSpan("latest");
 document.getElementById("spanAvg").onclick=()=>setSpan("avg");
 function setSched(sc){
-  state.sched=sc; state.expanded=null; state.altOpen=null;
+  state.sched=sc; state.altOpen=null;
   document.getElementById("schedNewest").classList.toggle("on",sc==="newest");
   document.getElementById("schedSeasonal").classList.toggle("on",sc==="seasonal");
   renderBoard();
@@ -1410,58 +1297,35 @@ function setSched(sc){
 document.getElementById("schedNewest").onclick=()=>setSched("newest");
 document.getElementById("schedSeasonal").onclick=()=>setSched("seasonal");
 
-// ---- origin picker ----
-const oi = document.getElementById("originInput");
-const om = document.getElementById("originMenu");
-function setOriginInputLabel(){ const a=A[state.origin]; oi.value=a[0]+" — "+a[1]; }
-function openMenu(q){
-  const ql=(q||"").trim().toLowerCase();
-  const matches = originList.filter(idx=>{
-    const a=A[idx]; return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql);
-  });
-  om.innerHTML = matches.map(idx=>{
-    const a=A[idx];
-    return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
-  }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
-  om.classList.add("open");
-}
-oi.addEventListener("focus",()=>{ oi.select(); openMenu(""); });
-oi.addEventListener("input",()=>openMenu(oi.value));
-oi.addEventListener("blur",()=>setTimeout(()=>{ om.classList.remove("open"); setOriginInputLabel(); },150));
-om.addEventListener("mousedown",e=>{
-  const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
-  state.origin=+opt.dataset.idx; state.expanded=null;
-  om.classList.remove("open"); setOriginInputLabel(); renderBoard();
-});
-
-// ---- alternatives destination picker ----
-const dIn = document.getElementById("destInput");
-const dMenu = document.getElementById("destMenu");
+// ---- airport pickers: From and To, blank meaning anywhere ----
 const destSeats = new Map();
 for(const r of rows){ destSeats.set(r[1],(destSeats.get(r[1])||0)+r[5]); }
 const destList = [...destSeats.keys()].sort((a,b)=>(destSeats.get(b)||0)-(destSeats.get(a)||0));
-function openDestMenu(q){
-  const ql=(q||"").trim().toLowerCase();
-  const matches = destList.filter(idx=>{
-    const a=A[idx]; return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql);
+function picker(inputId, menuId, list, get, set){
+  const input=document.getElementById(inputId), menu=document.getElementById(menuId);
+  const label=()=>{ const i=get(); input.value = i==null? "" : A[i][0]+" — "+A[i][1]; };
+  const open=q=>{
+    const ql=(q||"").trim().toLowerCase();
+    const matches=list.filter(idx=>{ const a=A[idx];
+      return !ql || a[0].toLowerCase().includes(ql) || a[1].toLowerCase().includes(ql); });
+    menu.innerHTML = matches.map(idx=>{ const a=A[idx];
+      return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
+    }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
+    menu.classList.add("open");
+  };
+  input.addEventListener("focus",()=>{ input.select(); open(""); });
+  input.addEventListener("input",()=>open(input.value));
+  // clearing the box and leaving it is how you pick "anywhere"
+  input.addEventListener("blur",()=>setTimeout(()=>{ menu.classList.remove("open");
+    if(!input.value.trim()){ if(get()!=null){ set(null); renderBoard(); } } else label(); },150));
+  menu.addEventListener("mousedown",e=>{
+    const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
+    set(+opt.dataset.idx); menu.classList.remove("open"); label(); renderBoard();
   });
-  dMenu.innerHTML = matches.map(idx=>{
-    const a=A[idx];
-    return '<div class="origin-opt" data-idx="'+idx+'"><span class="code">'+a[0]+'</span><span class="city">'+esc(a[1])+(a[2]!=="US"?" · "+a[2]:"")+"</span></div>";
-  }).join("") || '<div class="origin-opt"><span class="city">No matching airports</span></div>';
-  dMenu.classList.add("open");
+  label();
 }
-dIn.addEventListener("focus",()=>{ dIn.select(); openDestMenu(""); });
-dIn.addEventListener("input",()=>openDestMenu(dIn.value));
-dIn.addEventListener("blur",()=>setTimeout(()=>{ dMenu.classList.remove("open");
-  if(state.altDest!=null){ const a=A[state.altDest]; dIn.value=a[0]+" — "+a[1]; } },150));
-dMenu.addEventListener("mousedown",e=>{
-  const opt=e.target.closest(".origin-opt[data-idx]"); if(!opt) return;
-  state.altDest=+opt.dataset.idx;
-  dMenu.classList.remove("open");
-  const a=A[state.altDest]; dIn.value=a[0]+" — "+a[1];
-  renderBoard();
-});
+picker("originInput","originMenu",originList, ()=>state.origin, v=>{ state.origin=v; });
+picker("destInput","destMenu",destList, ()=>state.altDest, v=>{ state.altDest=v; });
 (function(){
   const dg=document.getElementById("dowGroup");
   dg.innerHTML='<button class="chip on" data-dow="-1">Any</button>'
@@ -1505,18 +1369,6 @@ dMenu.addEventListener("mousedown",e=>{
 })();
 
 // ---- filters ----
-document.getElementById("geoGroup").addEventListener("click",e=>{
-  const b=e.target.closest("[data-geo]"); if(!b) return;
-  state.geo=b.dataset.geo;
-  document.querySelectorAll("#geoGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
-  renderBoard();
-});
-document.getElementById("freqGroup").addEventListener("click",e=>{
-  const b=e.target.closest("[data-minf]"); if(!b) return;
-  state.minFpd=+b.dataset.minf;
-  document.querySelectorAll("#freqGroup .chip").forEach(c=>c.classList.toggle("on",c===b));
-  renderBoard();
-});
 document.getElementById("carGroup").addEventListener("click",e=>{
   const b=e.target.closest("[data-car]"); if(!b) return;
   const c=+b.dataset.car;
@@ -1524,37 +1376,16 @@ document.getElementById("carGroup").addEventListener("click",e=>{
   b.classList.toggle("on",state.cars.has(c));
   renderBoard();
 });
-document.getElementById("destSearch").addEventListener("input",e=>{ state.destFilter=e.target.value; renderBoard(); });
-document.querySelectorAll(".th[data-sort]").forEach(th=>{
-  th.addEventListener("click",()=>{
-    const k=th.dataset.sort;
-    if(state.sort===k) state.dir*=-1;
-    else { state.sort=k; state.dir=(k==="lf"||k==="code")?1:-1; }
-    document.querySelectorAll(".th").forEach(t=>{t.classList.remove("active"); const a=t.querySelector(".arr"); if(a)a.textContent="";});
-    th.classList.add("active");
-    const a=th.querySelector(".arr"); if(a)a.textContent=state.dir<0?"▼":"▲";
-    renderBoard();
-  });
-});
-
 // ---- view tabs ----
 function setView(v){
-  state.view=v; state.expanded=null;
-  document.getElementById("tabBoard").classList.toggle("on",v==="board");
+  state.view=v;
   document.getElementById("tabTrip").classList.toggle("on",v==="trip");
   document.getElementById("tabAlt").classList.toggle("on",v==="alt");
-  const board = v==="board";
-  document.getElementById("geoGroup").style.display = board? "":"none";
-  document.getElementById("freqGroup").style.display = board? "":"none";
-  document.getElementById("destCell").style.display = board? "":"none";
   document.getElementById("contGroup").style.display = v==="trip"? "":"none";
   syncAreaGroup();
   document.getElementById("altGroup").style.display = v==="alt"? "":"none";
-  document.getElementById("originLabel").textContent = v==="alt"? "Your location" : "Departing from";
-  document.querySelector(".thead").style.display = board? "":"none";
   renderBoard();
 }
-document.getElementById("tabBoard").onclick=()=>setView("board");
 document.getElementById("tabTrip").onclick=()=>setView("trip");
 document.getElementById("tabAlt").onclick=()=>setView("alt");
 function syncAreaGroup(){
@@ -1582,105 +1413,7 @@ document.getElementById("areaGroup").addEventListener("click",e=>{
 
 // ---- board ----
 function renderBoard(){
-  if(state.view==="trip"){ renderTrips(); return; }
-  if(state.view==="alt"){ renderAlts(); return; }
-  const isWeek = state.mode==="week";
-  const list = isWeek? computeWeek(state.origin,state.week) : computeMonth(state.origin,state.month);
-  const cont = document.getElementById("rows");
-  const oa = A[state.origin];
-  const sum = document.getElementById("summary");
-  const whenTxt = whenText();
-  if(list.length){
-    sum.innerHTML = "<strong>"+list.length+" destinations</strong> from "+oa[0]+" · "+whenTxt+esc(schedNote())+(isWeek?' <span class="estbadge">Estimate</span>':"");
-  } else sum.textContent="";
-
-  if(!list.length){
-    cont.innerHTML='<div class="empty">No routes match.</div>';
-    return;
-  }
-  const dmi = schedIdx();
-  let html="";
-  list.forEach((r,i)=>{
-    const colB=lfColor(r.lf), colT=lfText(r.lf);
-    const isOpen=state.expanded===r.d;
-    html += '<button class="rowbtn" data-d="'+r.d+'" aria-expanded="'+isOpen+'">'
-      +'<span class="dcode">'+r.code+"</span>"
-      +'<span class="dcity">'+esc(r.city)+(r.intl?'<span class="tag">INTL</span>':"")+"</span>"
-      +schedHTML(r.fpd,oa[0],r.code,dmi)
-      +'<span class="gauge"><span class="cabin"><span class="fill" style="width:'+Math.min(100,r.lf).toFixed(1)+'%;background:'+colB+'"></span></span><span class="lfnum" style="color:'+colT+'">'+r.lf.toFixed(0)+"%</span></span>"
-      +'<span class="opennum" style="color:'+colT+'">'+Math.round(r.open)+'<small class="mcap">open seats/flight</small></span>'
-      +"</button>"
-      +'<div class="season'+(isOpen?" open":"")+'">'+(isOpen? seasonHTML(r):"")+"</div>";
-  });
-  cont.innerHTML=html;
-  cont.querySelectorAll(".rowbtn").forEach(b=>{
-    b.addEventListener("click",()=>{
-      const d=+b.dataset.d;
-      state.expanded = state.expanded===d? null : d;
-      renderBoard();
-    });
-  });
-}
-
-function seasonHTML(r){
-  const series = destSeries(state.origin).get(r.d) || [];
-  const oa=A[state.origin];
-  // selected point(s) to highlight
-  let selIdx = new Set();
-  if(state.mode==="month"){ const p=PIDX.get(pointKey(latestYearFor(state.month),state.month)); if(p) selIdx.add(p.i); }
-  else {
-    const t=WEEKS[state.week].getTime()+3.5*864e5;
-    let i2=POINTS.findIndex(p=>p.mid>=t); if(i2<0)i2=POINTS.length-1;
-    selIdx.add(i2); selIdx.add(Math.max(0,POINTS[i2].mid===t?i2:i2-1));
-  }
-  const avgMode = (state.mode==="month" && state.span==="avg");
-  let cells;
-  if(avgMode){
-    cells = [];
-    for(let mm=1; mm<=12; mm++){
-      let dep=0, seats=0, pax=0, days=0;
-      for(const p of POINTS){
-        if(p.m!==mm) continue;
-        const a=series[p.i];
-        if(!a || a.dep<1 || a.seats<1) continue;
-        dep+=a.dep; seats+=a.seats; pax+=a.pax; days+=p.days;
-      }
-      if(dep<1 || seats<1){ cells.push({p:{m:mm,y:0,i:-1}, na:true}); continue; }
-      cells.push({p:{m:mm,y:0,i:-1}, lf:pax/seats*100, open:(seats-pax)/dep, fpd:dep/days});
-    }
-  } else {
-    cells = POINTS.slice(-12).map(p=>{
-      const a=series[p.i];
-      if(!a||a.dep<1) return {p,na:true};
-      const m=metricsAt(a,p);
-      return {p,lf:m.lf,open:m.open,fpd:m.fpd};
-    });
-  }
-  const dayArr = DAYS[oa[0]+"-"+r.code];
-  const avail = cells.filter(c=>!c.na);
-  const maxOpen = Math.max(...avail.map(c=>c.open),1);
-  let best=null; for(const c of avail){ if(!best||c.open>best.open) best=c; }
-  let h='<h4><b>'+oa[0]+' → '+r.code+"</b> · open seats per flight by month"+(avgMode?" · 3-year average":"")+" · ≈"+Math.round(r.spf)+" seats/flight</h4><div class='strip'>";
-  for(const c of cells){
-    const lab = MONTH_ABBR[c.p.m-1].slice(0,1)+MONTH_ABBR[c.p.m-1].slice(1).toLowerCase();
-    const yr = (!avgMode && (c.p.m===1||c===cells[0]))? "’"+String(c.p.y).slice(2) : "";
-    if(c.na){ h+='<div class="mcell"><div class="mbar na"></div><div class="mlab">'+lab+'<i>'+yr+'</i></div><div class="mval">—</div></div>'; continue; }
-    const hp=Math.max(6,c.open/maxOpen*100), col=lfColor(c.lf);
-    const cls = (best===c?" best":"")+((avgMode? c.p.m===state.month : selIdx.has(c.p.i))?" sel":"");
-    let dtxt="";
-    if(c.fpd<0.9 && dayArr && c.p.y){
-      const di = DM_IDX.get(c.p.y+"-"+String(c.p.m).padStart(2,"0"));
-      const mk = di==null? 0 : dayArr[di];
-      if(mk>0 && mk<127){ const dl=daysLabel(mk); if(dl) dtxt='<small class="mdays">'+dl+'</small>'; }
-    }
-    h+='<div class="mcell"><div class="mbar'+cls+'" title="'+MONTH_FULL[c.p.m-1]+(avgMode?" · 3-year average":" "+c.p.y)+': '+c.lf.toFixed(1)+'% full">'
-      +'<div class="bf" style="height:'+hp.toFixed(0)+'%;background:'+col+'"></div></div>'
-      +'<div class="mlab">'+lab+'<i>'+(yr||"&nbsp;")+'</i></div>'
-      +'<div class="mval">'+Math.round(c.open)+"<small>"+c.lf.toFixed(0)+"%</small>"+dtxt+"</div>";
-    h+="</div>";
-  }
-  h+="</div>";
-  return h;
+  if(state.view==="trip") renderTrips(); else renderAlts();
 }
 
 // ---- theme toggle ----
@@ -1715,11 +1448,10 @@ function seasonHTML(r){
       if(e.key==="Escape" && panel.classList.contains("open")){ setOpen(false); btn.focus(); }
     });
   })();
-  setOriginInputLabel();
   syncRadChips(); // correct even before the Alternatives tab is first opened
   renderMonths();
   renderWeekOut();
-  renderBoard();
+  setView(state.view); // also shows the tab's own controls
 })();
 </script>
 </body>
