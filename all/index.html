@@ -564,6 +564,7 @@ const TIMES = DATA.times || {};
 const ARRS = DATA.arrs || {};   // scheduled arrivals, index-aligned with TIMES
 // tzOf is defined with the other timezone code, below.
 const ITIMES = DATA.intlTimes || {}; // current-schedule snapshot (intl routes)
+const IARRS = DATA.intlArrs || {};   // their arrivals, index-aligned, where the board had them
 const IMETA = DATA.intlMeta || {label:"", sampled:[]};
 const ISAMPLED = new Set(IMETA.sampled);
 const DM_IDX = new Map((DATA.dm||[]).map((s,i)=>[s,i]));
@@ -904,7 +905,10 @@ function banksOf(o, d, dmi){
   const t=(dmi>=0 && TIMES[key])? TIMES[key][dmi] : null;
   const a=(dmi>=0 && ARRS[key])? ARRS[key][dmi] : null;
   if(t && t.length) return {dep:t, arr:(a && a.length===t.length)? a : null};
-  if(ITIMES[key] && ITIMES[key].length>1) return {dep:ITIMES[key].slice(1), arr:null};
+  if(ITIMES[key] && ITIMES[key].length>1){
+    const dep=ITIMES[key].slice(1), a=IARRS[key];
+    return {dep, arr:(a && a.length===dep.length)? a : null};
+  }
   return null;
 }
 // earliest scheduled arrival at the final destination; null when unknown.

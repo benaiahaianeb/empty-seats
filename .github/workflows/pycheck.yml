@@ -58,4 +58,34 @@ jobs:
           assert "1300" in str(ua.times) and "900" not in str(ua.times), "United's banks must not include Delta's"
           assert not len(rd[(rd.mkt=="UA")&(rd.o=="BOS")]), "no BOS-ATL under United"
           print("route_days: one row per marketer, times kept apart")
+
+          # ---- intl sampler: one FIDS call with both boards and both legs ----
+          import os, json
+          os.environ["AERODATABOX_KEY"] = "test"
+          R.INTL_CSV = tmp / "intl_times.csv"
+          def fl(num, o, d, dep, arr):
+              return {"number": num,
+                      "departure": {"airport": {"iata": o}, "scheduledTime": {"local": dep}},
+                      "arrival":   {"airport": {"iata": d}, "scheduledTime": {"local": arr}}}
+          class FR:
+              status_code = 200
+              def json(self):
+                  return {"departures": [fl("DL 401", "BOS", "LHR", "2025-07-05 19:05-04:00", "2025-07-06 06:25+01:00"),
+                                         fl("UA 1234", "BOS", "LHR", "2025-07-05 21:40-04:00", "2025-07-06 09:05+01:00"),
+                                         fl("XX 9", "BOS", "LHR", "2025-07-05 08:00-04:00", "2025-07-05 20:00+01:00")],
+                          "arrivals":   [fl("DL 402", "LHR", "BOS", "2025-07-05 11:20+01:00", "2025-07-05 13:55-04:00")]}
+          calls = []
+          R.requests.get = lambda url, **k: (calls.append(url), FR())[1]
+          nets = {"DL": pd.DataFrame({"ORIGIN":["BOS"],"DEST":["LHR"],"seats":[100]}),
+                  "UA": pd.DataFrame({"ORIGIN":["BOS"],"DEST":["LHR"],"seats":[50]})}
+          apl = {"BOS": ("Boston, MA", "US"), "LHR": ("London", "GB")}
+          R.rebuild_intl_times(nets, apl)
+          assert all("direction=Both" in u and "withLeg=true" in u for u in calls), calls[0]
+          it = pd.read_csv(R.INTL_CSV); print(it.to_string())
+          row = lambda m,o,d: it[(it.mkt==m)&(it.o==o)&(it.d==d)].iloc[0]
+          assert row("DL","BOS","LHR").times == 1905 and row("DL","BOS","LHR").arrs == 625, "arrival kept from withLeg"
+          assert row("UA","BOS","LHR").times == 2140, "other airlines kept from the same call"
+          assert row("DL","LHR","BOS").times == 1120 and row("DL","LHR","BOS").arrs == 1355, "foreign-origin leg from the arrivals board"
+          assert not len(it[it.mkt=="XX"]), "unknown airline dropped"
+          print("intl sampler: both boards, both legs, every airline, one call per window;", len(calls), "calls")
           PY

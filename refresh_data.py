@@ -266,108 +266,148 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
           + (f", {left} still missing" if left else ""))
 
 
-def rebuild_intl_times(g: pd.DataFrame, ap_lookup: dict) -> None:
-    """Snapshot normal departure times and operating days for Delta
-    international routes.
+def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
+    """Snapshot international schedules from AeroDataBox airport boards.
 
-    DOT on-time data (source of domestic times) covers domestic flights only,
-    so international schedules come from AeroDataBox FIDS departure boards
-    (API key in the AERODATABOX_KEY env var; RapidAPI or API.market). Samples
-    the next 7 days at the top international Delta gateways so weekly patterns
-    are captured; routes not seen this month (e.g. opposite-season service)
-    keep their previous entry. Skips gracefully without a key.
+    DOT on-time data covers domestic flights only, so international times come
+    from the boards at each airline's busiest international gateways (API key
+    in AERODATABOX_KEY; RapidAPI or API.market). One call per gateway per
+    twelve-hour window returns both boards with both ends of every flight, for
+    every airline: the departures board gives gateway-to-abroad legs with their
+    arrival times, the arrivals board gives abroad-to-gateway legs with their
+    departure times. Times barely move within a season and rows carry forward,
+    so a normal month samples two days plus two far probes for opposite-season
+    routes; every third month samples a full week for day-of-week masks.
+    Skips gracefully without a key.
     """
     import os
     key = os.environ.get("AERODATABOX_KEY", "").strip()
     if not key:
         print("  AERODATABOX_KEY not set; keeping existing intl_times.csv")
         return
-    intl_dest = {c for c, (_, ctry) in ap_lookup.items() if ctry != "US"}
+    intl = {c for c, (_, ctry) in ap_lookup.items() if ctry != "US"}
     us = {c for c, (_, ctry) in ap_lookup.items() if ctry == "US"}
-    gi = g[g.ORIGIN.isin(us) & g.DEST.isin(intl_dest)]
-    if not len(gi):
+    gateways: set[str] = set()
+    for g in nets.values():
+        gi = g[g.ORIGIN.isin(us) & g.DEST.isin(intl)]
+        if len(gi):
+            gateways |= set(gi.groupby("ORIGIN").seats.sum()
+                            .sort_values(ascending=False).head(10).index)
+    if not gateways:
         print("  no international routes found")
         return
-    origins = (gi.groupby("ORIGIN").seats.sum()
-               .sort_values(ascending=False).head(10).index.tolist())
     hosts = [("aerodatabox.p.rapidapi.com",
               {"X-RapidAPI-Key": key, "X-RapidAPI-Host": "aerodatabox.p.rapidapi.com"}),
              ("prod.api.market/api/v1/aedbx/aerodatabox",
               {"x-api-market-key": key})]
-    block = [dt.date.today() + dt.timedelta(days=k) for k in range(1, 8)]
-    # far-future probes catch opposite-season routes; some API tiers
-    # reject far dates, and the loop skips those responses
-    probes = [dt.date.today() + dt.timedelta(days=k) for k in (120, 180)]
-    days = block + probes
-    blockset = set(block)
+    today = dt.date.today()
+    full = today.month % 3 == 0
+    block = [today + dt.timedelta(days=k) for k in range(1, 8 if full else 3)]
+    probes = [today + dt.timedelta(days=k) for k in (120, 180)]
     windows = [("00:00", "11:59"), ("12:00", "23:59")]
-    mins: dict[tuple[str, str], list[int]] = {}
-    dows: dict[tuple[str, str], set[int]] = {}
+
+    def leg(f, side):  # (airport iata, local time string) for one end of a flight
+        m = f.get(side) or {}
+        return ((m.get("airport") or {}).get("iata"),
+                (m.get("scheduledTime") or {}).get("local", ""))
+
+    mins: dict[tuple, list[int]] = {}
+    amins: dict[tuple, list[int]] = {}
+    dows: dict[tuple, set[int]] = {}
     hi, ok_calls = 0, 0
-    for o in origins:
-        for day in days:
+    for gw in sorted(gateways):
+        for day in block + probes:
             for t1, t2 in windows:
                 data = None
                 while hi < len(hosts):
                     host, hdrs = hosts[hi]
-                    url = (f"https://{host}/flights/airports/iata/{o}/"
+                    url = (f"https://{host}/flights/airports/iata/{gw}/"
                            f"{day}T{t1}/{day}T{t2}"
-                           "?direction=Departure&withCodeshared=false"
-                           "&withCargo=false&withPrivate=false&withLeg=false")
+                           "?direction=Both&withLeg=true&withCodeshared=false"
+                           "&withCargo=false&withPrivate=false")
                     try:
                         r = requests.get(url, headers=hdrs, timeout=60)
                     except requests.RequestException as e:
-                        print(f"    {o} {day}: {e}")
+                        print(f"    {gw} {day}: {e}")
                         break
                     if r.status_code in (401, 403) and ok_calls == 0:
                         print(f"    host {host} rejected key; trying next")
                         hi += 1
                         continue
                     if r.status_code != 200:
-                        print(f"    {o} {day} {t1}: HTTP {r.status_code}")
+                        print(f"    {gw} {day} {t1}: HTTP {r.status_code}")
                         break
                     data = r.json()
                     break
                 if data is None:
                     continue
                 ok_calls += 1
-                for f in data.get("departures", []):
-                    num = (f.get("number") or "").replace(" ", "")
-                    if not re.match(r"^DL\d", num):
-                        continue
-                    mv = f.get("movement") or {}
-                    dest = (mv.get("airport") or {}).get("iata")
-                    tloc = (mv.get("scheduledTime") or {}).get("local", "")
-                    m = re.search(r"[ T](\d{2}):(\d{2})", tloc)
-                    if not dest or dest not in intl_dest or not m:
-                        continue
-                    mins.setdefault((o, dest), []).append(
-                        int(m.group(1)) * 60 + int(m.group(2)))
-                    if day in blockset:  # masks only from the consecutive week
-                        dows.setdefault((o, dest), set()).add(day.weekday())
+                for board in ("departures", "arrivals"):
+                    for f in data.get(board, []):
+                        num = (f.get("number") or "").replace(" ", "")
+                        m = re.match(r"^([A-Z0-9]{2})\d", num)
+                        if not m or m.group(1) not in CARRIERS:
+                            continue
+                        mkt = m.group(1)
+                        # with withLeg both ends are present; without it only
+                        # "movement" (the far end) is
+                        if "departure" in f or "arrival" in f:
+                            o, dt_ = leg(f, "departure")
+                            d, at_ = leg(f, "arrival")
+                            if board == "departures" and not o: o = gw
+                            if board == "arrivals" and not d: d = gw
+                        else:
+                            far, ft = leg(f, "movement")
+                            o, d = (gw, far) if board == "departures" else (far, gw)
+                            dt_, at_ = (ft, "") if board == "departures" else ("", ft)
+                        if not o or not d or (o not in intl and d not in intl):
+                            continue
+                        md = re.search(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})", dt_)
+                        if not md:
+                            continue
+                        ma = re.search(r"[ T](\d{2}):(\d{2})", at_)
+                        k = (mkt, o, d)
+                        mins.setdefault(k, []).append(int(md.group(4)) * 60 + int(md.group(5)))
+                        amins.setdefault(k, []).append(
+                            int(ma.group(1)) * 60 + int(ma.group(2)) if ma else -1)
+                        if full and day not in probes:
+                            dows.setdefault(k, set()).add(
+                                dt.date(int(md.group(1)), int(md.group(2)),
+                                        int(md.group(3))).weekday())
     if not mins:
         print(f"  no international times retrieved ({ok_calls} calls); "
               "keeping existing intl_times.csv")
         return
-    old = pd.DataFrame(columns=["o", "d", "mask", "times", "asof"])
+    cols = ["mkt", "o", "d", "mask", "times", "arrs", "asof"]
+    old = pd.DataFrame(columns=cols)
     if INTL_CSV.exists():
         prev = pd.read_csv(INTL_CSV)
-        if "mask" not in prev.columns:
-            prev["mask"] = 0
-        old = prev[["o", "d", "mask", "times", "asof"]]
+        if "mkt" not in prev.columns: prev["mkt"] = "DL"     # pre-fork file
+        if "mask" not in prev.columns: prev["mask"] = 0
+        if "arrs" not in prev.columns: prev["arrs"] = ""
+        old = prev[cols]
     sampled = set(mins)
-    keep = old[[(o, d) not in sampled for o, d in zip(old.o, old.d)]]
-    rows = [(o, d, sum(1 << w for w in dows.get((o, d), set())),
-             " ".join(str(x) for x in _time_banks(mins[(o, d)])),
-             str(dt.date.today()))
-            for (o, d) in sorted(sampled)]
-    out = pd.concat(
-        [keep, pd.DataFrame(rows, columns=["o", "d", "mask", "times", "asof"])],
-        ignore_index=True).sort_values(["o", "d"])
+    keep = old[[(m_, o, d) not in sampled for m_, o, d in zip(old.mkt, old.o, old.d)]]
+    rows = []
+    for k in sorted(sampled):
+        pairs = [(dm_, am_) for dm_, am_ in zip(mins[k], amins[k]) if am_ >= 0]
+        if len(pairs) == len(mins[k]):
+            deps, arrs = _dep_arr_banks(pairs)
+        else:  # some arrivals unknown: bank departures alone, no arrivals
+            deps, arrs = _time_banks(mins[k]), []
+        mask = sum(1 << w for w in dows.get(k, set()))
+        prevmask = old[(old.mkt == k[0]) & (old.o == k[1]) & (old.d == k[2])]["mask"]
+        if not full and len(prevmask):   # a light month keeps last quarter's mask
+            mask = int(prevmask.iloc[0])
+        rows.append((k[0], k[1], k[2], mask,
+                     " ".join(str(x) for x in deps), " ".join(str(x) for x in arrs),
+                     str(today)))
+    out = pd.concat([keep, pd.DataFrame(rows, columns=cols)],
+                    ignore_index=True).sort_values(["mkt", "o", "d"])
     out.to_csv(INTL_CSV, index=False)
     print(f"  wrote {INTL_CSV} ({len(rows)} sampled + {len(keep)} carried, "
+          f"{len(gateways)} gateways, {'full week' if full else 'light'}, "
           f"{ok_calls} API calls)")
-
 
 
 # Airports whose IATA code postdates the OpenFlights dump (it stopped being
@@ -544,6 +584,7 @@ def main() -> int:
             ap_lookup.setdefault(r.ORIGIN, (r.ORIGIN_CITY_NAME, r.ORIGIN_COUNTRY))
             ap_lookup.setdefault(r.DEST, (r.DEST_CITY_NAME, r.DEST_COUNTRY))
     all_codes = set(ap_lookup)
+    us_codes = {c_ for c_, (_, ctry) in ap_lookup.items() if ctry == "US"}
 
     window_months = sorted({(int(y), int(mo)) for g in nets.values()
                             for y, mo in zip(g.YEAR, g.MONTH)})
@@ -561,7 +602,7 @@ def main() -> int:
 
     print("Refreshing international departure times ...")
     try:
-        rebuild_intl_times(nets["DL"], ap_lookup)   # sampled for Delta only
+        rebuild_intl_times(nets, ap_lookup)
     except Exception as e:  # never let intl times break the build
         print(f"  intl times failed: {e}")
 
@@ -572,7 +613,9 @@ def main() -> int:
     ii = pd.read_csv(IANA_CSV) if IANA_CSV.exists() else pd.DataFrame(columns=["code", "tz"])
     cc = pd.read_csv(COORDS_CSV) if COORDS_CSV.exists() else pd.DataFrame(columns=["code", "lat", "lon"])
     it = pd.read_csv(INTL_CSV) if INTL_CSV.exists() else pd.DataFrame(
-        columns=["o", "d", "mask", "times", "asof"])
+        columns=["mkt", "o", "d", "mask", "times", "arrs", "asof"])
+    if "mkt" not in it.columns: it["mkt"] = "DL"
+    if "arrs" not in it.columns: it["arrs"] = ""
 
     import json
     written = []
@@ -609,24 +652,32 @@ def main() -> int:
         arrivals = {f"{o}-{d}": arr for (o, d), arr in tmp_a.items()}
 
         intl_times: dict[str, list[int]] = {}
+        intl_arrs: dict[str, list[int]] = {}
         intl_meta = {"label": "", "sampled": []}
-        if c == "DL" and len(it):
-            imasks = it["mask"] if "mask" in it.columns else [0] * len(it)
-            for o, d, tv, mk in zip(it.o, it.d, it.times, imasks):
-                tv = str(tv).strip()
+        itc = it[it.mkt == c]
+        if len(itc):
+            imasks = itc["mask"] if "mask" in itc.columns else [0] * len(itc)
+            for o, d, tv, av, mk in zip(itc.o, itc.d, itc.times, itc.arrs, imasks):
+                tv, av = str(tv).strip(), str(av).strip()
                 if (o, d) in route_set and tv and tv != "nan":
                     try:
                         mkv = int(mk)
                     except (TypeError, ValueError):
                         mkv = 0
-                    intl_times[f"{o}-{d}"] = [mkv] + [int(x) for x in tv.split()]
-            latest = str(it["asof"].max())
+                    deps = [int(x) for x in tv.split()]
+                    intl_times[f"{o}-{d}"] = [mkv] + deps
+                    if av and av != "nan":
+                        arrs = [int(x) for x in av.split()]
+                        if len(arrs) == len(deps):
+                            intl_arrs[f"{o}-{d}"] = arrs
+            latest = str(itc["asof"].max())
             try:
                 ad = dt.date.fromisoformat(latest)
                 mons = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                         "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
                 intl_meta["label"] = f"{mons[ad.month-1]} \u2019{str(ad.year)[2:]}"
-                intl_meta["sampled"] = sorted(set(it[it["asof"] == latest].o))
+                intl_meta["sampled"] = sorted(set(itc[(itc["asof"] == latest)
+                                                     & itc.o.isin(us_codes)].o))
             except ValueError:
                 pass
 
@@ -638,8 +689,8 @@ def main() -> int:
         payload = json.dumps({"carrier": {"code": c, "name": CARRIERS[c]},
                               "airports": airports, "rows": rows, "coords": coords,
                               "days": days, "dm": dm, "times": times, "arrs": arrivals,
-                              "intlTimes": intl_times, "intlMeta": intl_meta,
-                              "tzn": iana},
+                              "intlTimes": intl_times, "intlArrs": intl_arrs,
+                              "intlMeta": intl_meta, "tzn": iana},
                              separators=(",", ":"))
         (DATA_DIR / f"{c}.json").write_text(payload)
         written.append({"code": c, "name": CARRIERS[c], "airports": len(airports),
