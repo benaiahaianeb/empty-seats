@@ -14,6 +14,6 @@ python refresh_data.py --refresh-skywest # also rebuild SkyWest attribution (1-2
 
 A GitHub Action runs the same refresh on the 15th of each month and commits `index.html` when BTS publishes a new month. The Actions tab ("Run workflow") triggers it on demand.
 
-International departure times come from the AeroDataBox API. Set the `AERODATABOX_KEY` repository secret to enable them. Without the key the refresh still succeeds and international rows show frequency only.
+International departure times come from the AeroDataBox API. 
 
 Sources: Bureau of Transportation Statistics T-100 Segment (All Carriers) and Marketing Carrier On-Time Performance; OurAirports for airport coordinates.
