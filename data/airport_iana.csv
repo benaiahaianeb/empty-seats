@@ -141,7 +141,6 @@ CSG,America/New_York
 CTA,Europe/Rome
 CTG,America/Bogota
 CTS,Asia/Tokyo
-CUL,America/Mazatlan
 CUN,America/Cancun
 CUR,America/Curacao
 CUU,America/Mazatlan
@@ -373,6 +372,7 @@ MHT,America/New_York
 MIA,America/New_York
 MID,America/Mexico_City
 MKE,America/Chicago
+MLA,Europe/Malta
 MLB,America/New_York
 MLI,America/Chicago
 MLM,America/Mexico_City
@@ -450,6 +450,7 @@ PMI,Europe/Madrid
 PMO,Europe/Rome
 PNI,Pacific/Ponape
 PNS,America/Chicago
+POA,America/Sao_Paulo
 POP,America/Santo_Domingo
 POS,America/Port_of_Spain
 PPG,Pacific/Pago_Pago
