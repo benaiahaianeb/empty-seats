@@ -289,7 +289,7 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
     # Basic covers one 180-call sample a month, so a second run inside 25 days
     # (a dispatch, then the cron) would run out of quota partway through
     if INTL_CSV.exists():
-        last = str(pd.read_csv(INTL_CSV).asof.max())
+        last = str(pd.read_csv(INTL_CSV)["asof"].max())
         if dt.date.fromisoformat(last) > dt.date.today() - dt.timedelta(days=25):
             print(f"  international times last sampled {last}; one sample a month "
                   "fits the free plan, keeping existing intl_times.csv")
