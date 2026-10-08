@@ -1,19 +1,7 @@
-# Empty Seats
+
 
 Finds the Delta routes with the most empty seats, for non-rev standby planning.
 
-Covers scheduled passenger service on Delta mainline (DL), Endeavor Air (9E), and the SkyWest (OO) flying marketed as Delta. Republic is excluded because T-100 data can't attribute its flying to one airline. Rolling 36-month window, refreshed monthly.
+Covers scheduled passenger service on Delta mainline (DL), Endeavor Air (9E), and the SkyWest (OO) flying marketed as Delta. Republic is excluded because available data can't attribute its flying to one airline. 
 
-## Refreshing data manually
-
-```bash
-pip install pandas requests
-python refresh_data.py                   # normal monthly refresh
-python refresh_data.py --refresh-skywest # also rebuild SkyWest attribution (1-2x/year)
-```
-
-A GitHub Action runs the same refresh on the 15th of each month and commits `index.html` when BTS publishes a new month. The Actions tab ("Run workflow") triggers it on demand.
-
-International departure times come from the AeroDataBox API. 
-
-Sources: Bureau of Transportation Statistics T-100 Segment (All Carriers) and Marketing Carrier On-Time Performance; OurAirports for airport coordinates.
+Sources: Bureau of Transportation Statistics T-100 Segment (All Carriers) and Marketing Carrier On-Time Performance; OurAirports for airport coordinates. International departure times come from the AeroDataBox API. 
