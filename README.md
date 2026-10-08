@@ -15,7 +15,7 @@ A rolling 36-month window, updated monthly.
 | --- | --- |
 | BTS T-100 Segment (All Carriers) | Seats and passengers |
 | BTS Marketing Carrier On-Time Performance | Schedules, day patterns |
-| AeroDataBox | International departure times |
+| AeroDataBox (free Basic plan) | International times, from boards at Delta's ten busiest international airports |
 | OurAirports | Airport coordinates |
 | OpenFlights | Airport time zones |
 

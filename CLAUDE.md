@@ -49,9 +49,12 @@ owner's working folder. This file is the short version.
 
 ## Known state
 
-- AeroDataBox has refused every call since 2026-07-10: RapidAPI says the account
-  is not subscribed to the API. International schedules are a July snapshot
-  (the summary line says so) until the owner resubscribes and dispatches the
-  workflow. A refused key now shows as a warning on the Actions run.
+- AeroDataBox has refused every call since 2026-07-10 ("not subscribed").
+  The RapidAPI account benaiah.george1@gmail.com has been on the free Basic plan
+  since 2026-10-08, but the 8 Oct run was still refused, so the
+  `AERODATABOX_KEY` secret (set 2026-07-09) belongs to a different account. Only
+  the owner can swap the key. Until then international schedules are a July
+  snapshot (the summary line says so). The sampler is sized for Basic: 180 of
+  200 calls a month, Delta's ten gateways.
 - Pipeline changes can only be verified in CI or by a dispatch run. Push to a
   branch first; the workflow commits data back to whatever branch it ran on.
