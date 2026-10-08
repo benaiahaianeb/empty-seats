@@ -286,6 +286,14 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
     if not key:
         print("  AERODATABOX_KEY not set; keeping existing intl_times.csv")
         return
+    # Basic covers one 180-call sample a month, so a second run inside 25 days
+    # (a dispatch, then the cron) would run out of quota partway through
+    if INTL_CSV.exists():
+        last = str(pd.read_csv(INTL_CSV).asof.max())
+        if dt.date.fromisoformat(last) > dt.date.today() - dt.timedelta(days=25):
+            print(f"  international times last sampled {last}; one sample a month "
+                  "fits the free plan, keeping existing intl_times.csv")
+            return
     intl = {c for c, (_, ctry) in ap_lookup.items() if ctry != "US"}
     us = {c for c, (_, ctry) in ap_lookup.items() if ctry == "US"}
     # Delta's gateways only: the union of all ten airlines' is 42 airports, more
@@ -343,14 +351,18 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
                     data = r.json()
                     break
                 if data is None:
+                    # ::warning:: shows on the Actions run summary, so a dead
+                    # key no longer hides behind a green run
                     if hi >= len(hosts):
-                        # ::warning:: shows on the Actions run summary, so a dead
-                        # key no longer hides behind a green run
                         print("::warning::AeroDataBox refused the key on every host; "
                               "international times were not refreshed (check the "
                               "AERODATABOX_KEY secret and its subscription)")
-                        return
-                    continue
+                    else:
+                        # a partial week would set wrong day patterns and hide
+                        # routes it never reached, so keep last month's file whole
+                        print("::warning::AeroDataBox failed partway (quota or outage); "
+                              "international times were not refreshed")
+                    return
                 ok_calls += 1
                 for board in ("departures", "arrivals"):
                     for f in data.get(board, []):

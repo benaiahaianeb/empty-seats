@@ -95,11 +95,32 @@ jobs:
           nets2 = {"DL": pd.DataFrame({"ORIGIN": gws, "DEST": ["LHR"] * 12, "seats": range(12, 0, -1)}),
                    "UA": pd.DataFrame({"ORIGIN": ["EWR"], "DEST": ["LHR"], "seats": [999]})}
           apl2 = {**{c: ("x", "US") for c in gws + ["EWR"]}, "LHR": ("London", "GB")}
+          R.INTL_CSV.unlink()   # a fresh month
           R.rebuild_intl_times(nets2, apl2)
           hit = {u.split("/iata/")[1].split("/")[0] for u in calls}
           assert hit == set(gws[:10]), hit
           assert len(calls) * 2 <= 400, len(calls)
           print("intl budget: Delta's top 10 gateways only,", len(calls), "calls =", 2 * len(calls), "units of 400")
+
+          # ---- one sample a month: a second run inside 25 days makes no calls ----
+          calls.clear()
+          R.rebuild_intl_times(nets2, apl2)
+          assert not calls, len(calls)
+
+          # ---- a failure partway (quota) stops at once and keeps last month's file whole ----
+          old = "mkt,o,d,mask,times,arrs,asof\nDL,BOS,LHR,127,1905,625,2020-01-01\n"
+          R.INTL_CSV.write_text(old)
+          n = {"k": 0}
+          class Q:
+              status_code = 429; text = "quota"
+          def flaky(url, **k):
+              n["k"] += 1
+              return FR() if n["k"] <= 3 else Q()
+          R.requests.get = flaky
+          R.rebuild_intl_times(nets2, apl2)
+          assert R.INTL_CSV.read_text() == old, "a partial run must not touch the file"
+          assert n["k"] == 4, n
+          print("intl guards: one sample a month; a partial run keeps the old file")
 
           # ---- exclusive regional keeps international routes the share table cannot see ----
           sh2 = pd.DataFrame({"op":["9E","OO","OO"],"o":["LGA","MSP","MSP"],"d":["BOS","RST","RST"],"mkt":["DL","DL","UA"],"share":[1.0,0.66,0.34]})
