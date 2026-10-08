@@ -76,8 +76,6 @@ rep(`          <div class="optrow">
 /* copy */
 rep(`Include international connections allows a foreign airport as a connecting point.</p>`,
     `Airline switches the whole dataset to another carrier; the choice is remembered on this device. Include international connections allows a foreign airport as a connecting point.</p>`, "faq options");
-rep(`International times come from airport departure boards;`,
-    `International times come from airport departure boards, for Delta only so far;`, "faq source");
 
 fs.writeFileSync(DST, s);
 console.log("--- wrote " + DST + " ---");

@@ -271,15 +271,15 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
     """Snapshot international schedules from AeroDataBox airport boards.
 
     DOT on-time data covers domestic flights only, so international times come
-    from the boards at each airline's busiest international gateways (API key
-    in AERODATABOX_KEY; RapidAPI or API.market). One call per gateway per
+    from the boards at Delta's ten busiest international gateways (API key in
+    AERODATABOX_KEY; RapidAPI or API.market). One call per gateway per
     twelve-hour window returns both boards with both ends of every flight, for
     every airline: the departures board gives gateway-to-abroad legs with their
     arrival times, the arrivals board gives abroad-to-gateway legs with their
-    departure times. Times barely move within a season and rows carry forward,
-    so a normal month samples two days plus two far probes for opposite-season
-    routes; every third month samples a full week for day-of-week masks.
-    Skips gracefully without a key.
+    departure times. Each month samples a full week, for day-of-week masks, plus
+    two far probes for opposite-season routes; rows not seen carry forward.
+    That is 10 x 9 x 2 = 180 calls, inside AeroDataBox's free Basic plan (400
+    units a month, 2 per airport board). Skips gracefully without a key.
     """
     import os
     key = os.environ.get("AERODATABOX_KEY", "").strip()
@@ -288,12 +288,13 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
         return
     intl = {c for c, (_, ctry) in ap_lookup.items() if ctry != "US"}
     us = {c for c, (_, ctry) in ap_lookup.items() if ctry == "US"}
-    gateways: set[str] = set()
-    for g in nets.values():
-        gi = g[g.ORIGIN.isin(us) & g.DEST.isin(intl)]
-        if len(gi):
-            gateways |= set(gi.groupby("ORIGIN").seats.sum()
-                            .sort_values(ascending=False).head(10).index)
+    # Delta's gateways only: the union of all ten airlines' is 42 airports, more
+    # than the free plan covers. Other airlines still get times wherever they
+    # fly from these airports, since every board lists every airline.
+    g = nets["DL"]
+    gi = g[g.ORIGIN.isin(us) & g.DEST.isin(intl)]
+    gateways = set(gi.groupby("ORIGIN").seats.sum()
+                   .sort_values(ascending=False).head(10).index)
     if not gateways:
         print("  no international routes found")
         return
@@ -302,8 +303,7 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
              ("prod.api.market/api/v1/aedbx/aerodatabox",
               {"x-api-market-key": key})]
     today = dt.date.today()
-    full = today.month % 3 == 0
-    block = [today + dt.timedelta(days=k) for k in range(1, 8 if full else 3)]
+    block = [today + dt.timedelta(days=k) for k in range(1, 8)]
     probes = [today + dt.timedelta(days=k) for k in (120, 180)]
     windows = [("00:00", "11:59"), ("12:00", "23:59")]
 
@@ -380,7 +380,7 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
                         mins.setdefault(k, []).append(int(md.group(4)) * 60 + int(md.group(5)))
                         amins.setdefault(k, []).append(
                             int(ma.group(1)) * 60 + int(ma.group(2)) if ma else -1)
-                        if full and day not in probes:
+                        if day not in probes:
                             dows.setdefault(k, set()).add(
                                 dt.date(int(md.group(1)), int(md.group(2)),
                                         int(md.group(3))).weekday())
@@ -406,9 +406,6 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
         else:  # some arrivals unknown: bank departures alone, no arrivals
             deps, arrs = _time_banks(mins[k]), []
         mask = sum(1 << w for w in dows.get(k, set()))
-        prevmask = old[(old.mkt == k[0]) & (old.o == k[1]) & (old.d == k[2])]["mask"]
-        if not full and len(prevmask):   # a light month keeps last quarter's mask
-            mask = int(prevmask.iloc[0])
         rows.append((k[0], k[1], k[2], mask,
                      " ".join(str(x) for x in deps), " ".join(str(x) for x in arrs),
                      str(today)))
@@ -416,7 +413,7 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
                     ignore_index=True).sort_values(["mkt", "o", "d"])
     out.to_csv(INTL_CSV, index=False)
     print(f"  wrote {INTL_CSV} ({len(rows)} sampled + {len(keep)} carried, "
-          f"{len(gateways)} gateways, {'full week' if full else 'light'}, "
+          f"{len(gateways)} gateways: {', '.join(sorted(gateways))}; "
           f"{ok_calls} API calls)")
 
 

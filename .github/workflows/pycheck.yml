@@ -89,6 +89,18 @@ jobs:
           assert not len(it[it.mkt=="XX"]), "unknown airline dropped"
           print("intl sampler: both boards, both legs, every airline, one call per window;", len(calls), "calls")
 
+          # ---- budget: AeroDataBox Basic is 400 units a month, 2 per airport board ----
+          calls.clear()
+          gws = ["BOS","JFK","ATL","DTW","MSP","SEA","LAX","SLC","MIA","ORD","IAD","SFO"]
+          nets2 = {"DL": pd.DataFrame({"ORIGIN": gws, "DEST": ["LHR"] * 12, "seats": range(12, 0, -1)}),
+                   "UA": pd.DataFrame({"ORIGIN": ["EWR"], "DEST": ["LHR"], "seats": [999]})}
+          apl2 = {**{c: ("x", "US") for c in gws + ["EWR"]}, "LHR": ("London", "GB")}
+          R.rebuild_intl_times(nets2, apl2)
+          hit = {u.split("/iata/")[1].split("/")[0] for u in calls}
+          assert hit == set(gws[:10]), hit
+          assert len(calls) * 2 <= 400, len(calls)
+          print("intl budget: Delta's top 10 gateways only,", len(calls), "calls =", 2 * len(calls), "units of 400")
+
           # ---- exclusive regional keeps international routes the share table cannot see ----
           sh2 = pd.DataFrame({"op":["9E","OO","OO"],"o":["LGA","MSP","MSP"],"d":["BOS","RST","RST"],"mkt":["DL","DL","UA"],"share":[1.0,0.66,0.34]})
           m_of = sh2.groupby("op").mkt.apply(set)
