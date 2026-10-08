@@ -1,6 +1,7 @@
 // Label-consistency audit (owner invariant): drives the page in jsdom across
 // origins, months and average mode; every schedule label must agree with the
-// banks and day pattern beside it. npm i jsdom once, then: node tools/audit.js
+// banks and day pattern beside it, and every connecting-leg chip with the
+// schedule its opened row lists. npm i jsdom once, then: node tools/audit.js
 // A second arg audits another built page, e.g. a per-airline check build.
 const {JSDOM,VirtualConsole}=require("jsdom"), fs=require("fs");
 const vc=new VirtualConsole(); vc.on("jsdomError",e=>console.log("JSDOM ERROR:",e.message));
@@ -36,6 +37,30 @@ function audit(tag){
     if(/^daily$/i.test(label) && dayTok>0 && dayTok<7) bad.push([tag,"bare Daily with day pattern",full]);
   }
 }
+// invariant 4: a connecting leg's chip label agrees with that leg's schedule as
+// the opened row lists it, and never reads Irregular (dead legs are excluded).
+// Opening a row re-renders the board, so only the first n rows are opened.
+function auditLegs(tag, n){
+  const R=D.getElementById("rows");
+  for(let k=0;k<n;k++){
+    const row=[...R.querySelectorAll(".triprow")].filter(r=>r.querySelectorAll(".leg").length>1)[k];
+    if(!row) return;
+    const key=row.dataset.tkey;
+    row.dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
+    const open=R.querySelector('.triprow[data-tkey="'+key+'"]');
+    const deps=[...open.nextElementSibling.querySelectorAll(".legtimes")].map(t=>{
+      const s=t.textContent, arrows=(s.match(/\d{2}:\d{2} →/g)||[]).length;
+      return arrows || (s.split(/ est\.| \(/)[0].match(/\d{2}:\d{2}/g)||[]).length;
+    });
+    [...open.querySelectorAll(".leg small")].forEach((s,i)=>{
+      const label=s.textContent.split(" · ").slice(1).join(" · ").trim(), pd=label.match(/^(\d+)×\/day$/);
+      checked++;
+      if(label==="Irregular") bad.push([tag,"leg chip reads Irregular",key]);
+      if(pd && deps[i] && +pd[1]!==deps[i]) bad.push([tag,"leg ×/day ≠ departures listed",key+": "+label+" vs "+deps[i]]);
+    });
+    open.dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
+  }
+}
 setTimeout(()=>{
   const origins=["BOS","ATL","DTW","MSP","JFK","LAX","SLC","SEA","LGA","RDU"];
   for(const o of origins){
@@ -50,6 +75,14 @@ setTimeout(()=>{
     D.getElementById("spanAvg").dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
     audit(o+"/avg");
     D.getElementById("spanLatest").dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
+    // trip finder: connecting-leg chips
+    D.getElementById("tabTrip").dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
+    [0, 6].forEach(i=>{
+      if(!months[i]) return;
+      months[i].dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
+      auditLegs(o+"/trip/m"+i, 10);
+    });
+    D.getElementById("tabAlt").dispatchEvent(new W.MouseEvent("click",{bubbles:true}));
   }
   console.log("schedule labels checked:", checked);
   console.log("violations:", bad.length);

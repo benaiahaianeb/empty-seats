@@ -7,9 +7,10 @@ the regional flying attributed to it by marketed share), writes one dataset
 per airline to data/<code>.json, and embeds Delta's into index.html.
 
 Usage:
-    python refresh_data.py                  # refresh T-100 loads (typical monthly run)
-    python refresh_data.py --refresh-skywest  # also rebuild the SkyWest->Delta
-                                              # attribution table (heavier; run 1-2x/year)
+    python refresh_data.py                  # monthly run; the July run also
+                                            # rebuilds the operator attribution table
+    python refresh_data.py --refresh-share  # rebuild that table now
+    python refresh_data.py --rebuild-only   # re-render index.html, no downloads
 
 Data window: rolling 36 months ending at the latest reported month.
 BTS reports with a ~3 month lag.
@@ -178,8 +179,8 @@ def rebuild_route_days(session, months: list[tuple[int, int]],
                        ops_by_mkt: dict[str, set[str]],
                        limit: int | None = None) -> None:
     """Incrementally build data/route_days.csv: per-route, per-month day-of-week
-    operating masks and normal scheduled departure banks for DL-marketed flights,
-    from Marketing-Carrier on-time data (domestic routes only). mask bit 0 =
+    operating masks and normal scheduled departure banks for each marketer's
+    flights, from Marketing-Carrier on-time data (domestic routes only). mask bit 0 =
     Monday; a weekday counts only if the route flew on at least half of that
     weekday's dates in the month, so one-off extra sections don't hide a clean
     pattern. times is a space-separated list of HHMM departure banks (local).
@@ -343,8 +344,11 @@ def rebuild_intl_times(nets: dict, ap_lookup: dict) -> None:
                     break
                 if data is None:
                     if hi >= len(hosts):
-                        print("  every host refused the key; keeping existing intl_times.csv "
-                              "(check the AERODATABOX_KEY secret and its subscription)")
+                        # ::warning:: shows on the Actions run summary, so a dead
+                        # key no longer hides behind a green run
+                        print("::warning::AeroDataBox refused the key on every host; "
+                              "international times were not refreshed (check the "
+                              "AERODATABOX_KEY secret and its subscription)")
                         return
                     continue
                 ok_calls += 1
@@ -430,13 +434,9 @@ def rebuild_iana(session, codes: set[str]) -> None:
     """Refresh data/airport_iana.csv (IANA time zone per airport) from the
     OpenFlights dump; keeps the existing file on failure.
 
-    airport_tz.csv derives a zone *label* for domestic airports out of BTS block
-    times, which is all the schedule column needs. Estimating an arrival time
-    needs a real UTC offset for a given date, including the destination's own DST
-    rules, and no foreign airport gets a label from that derivation at all. The
-    IANA name gives the browser both, for every airport. Where the two sources
-    overlap they agree on all 234 domestic airports, so this is a widening of the
-    derived table rather than a replacement for it.
+    The browser turns the IANA name into a real UTC offset for any date, with the
+    airport's own DST rules, which estimated arrivals need; it also derives the
+    ET/CT/... label for US airports from the July and January offsets.
     """
     url = ("https://raw.githubusercontent.com/jpatokal/openflights/master"
            "/data/airports.dat")
@@ -531,8 +531,9 @@ def main() -> int:
     today = dt.date.today()
 
     print("Downloading T-100 years ...")
-    years, frames = [today.year - 3, today.year - 2,
-                     today.year - 1, today.year], []
+    # five calendar years: in a January-March run the newest reported month is
+    # in last year, so the 36-month window starts four calendar years back
+    years, frames = range(today.year - 4, today.year + 1), []
     for y in years:
         df = download_t100_year(session, y)
         if df is not None:
@@ -550,7 +551,9 @@ def main() -> int:
     lo_key = latest_year * 12 + latest_month - 35
     df = df[(df.YEAR * 12 + df.MONTH) >= lo_key]
 
-    if args.refresh_share or not SHARE_CSV.exists():
+    # also yearly in July (that January's on-time data is out by then): the
+    # cron is the only place this script really runs
+    if args.refresh_share or not SHARE_CSV.exists() or today.month == 7:
         print("Rebuilding operator attribution ...")
         rebuild_op_share(session, latest_year)
     share = pd.read_csv(SHARE_CSV)
@@ -639,7 +642,7 @@ def main() -> int:
         idx = {code: i for i, code in enumerate(codes)}
         airports = [[code, ap_lookup[code][0], ap_lookup[code][1]] for code in codes]
         rows = [[idx[r.ORIGIN], idx[r.DEST], int(r.YEAR), int(r.MONTH),
-                 int(round(r.dep)), int(round(r.seats)), int(round(r.pax)), 0]
+                 int(round(r.dep)), int(round(r.seats)), int(round(r.pax))]
                 for _, r in g.iterrows()]
         route_set = set(zip(g.ORIGIN, g.DEST))
 

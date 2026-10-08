@@ -11,18 +11,20 @@ owner's working folder. This file is the short version.
 - `index.html` = template with Delta's dataset embedded at `/*__DATA__*/null`.
 - `all/index.html` = template with a loader instead of the embed. Generated:
   `node tools/make_all.js`. Never edit it by hand.
-- `refresh_data.py` builds everything from BTS + AeroDataBox. No Python on the
-  owner's machine; `.github/workflows/pycheck.yml` compiles and unit-tests it on
-  every push, and `refresh.yml` (cron 15th, or dispatch) does the real build.
+- `refresh_data.py` builds everything from BTS + AeroDataBox. The owner's machine
+  has Python but not pandas, so locally only `python -m py_compile` works;
+  `.github/workflows/pycheck.yml` compiles and unit-tests it on every push, and
+  `refresh.yml` (cron 15th, or dispatch) does the real build.
 - `data/<code>.json` per airline, `data/carriers.json`, and the CSVs the
   pipeline keeps between runs. Committed by the workflow.
 
 ## After any template change, in this order
 
 1. `node tools/make_all.js` (regenerates `all/index.html`).
-2. Rebuild `index.html`: `python refresh_data.py --rebuild-only`, or the ten-line
-   node equivalent (lift `const DATA = ...;` out of the committed `index.html`,
-   replace the placeholder). The data window must not change.
+2. Rebuild `index.html` with the ten-line node equivalent of
+   `python refresh_data.py --rebuild-only` (which needs pandas): lift
+   `const DATA = ...;` out of the *committed* `index.html` on GitHub, not a local
+   copy, and replace the placeholder. The data window must not change.
 3. `node tools/audit.js` must report zero violations. It drives the page in
    jsdom (`npm i jsdom` once) and checks every schedule label against the banks
    and day pattern beside it. This is an owner invariant.
@@ -47,8 +49,9 @@ owner's working folder. This file is the short version.
 
 ## Known state
 
-- The AeroDataBox key stopped working 2026-07-10. International schedules are a
-  July snapshot until the `AERODATABOX_KEY` secret is fixed and the workflow
-  dispatched. Only the owner can do that.
+- AeroDataBox has refused every call since 2026-07-10: RapidAPI says the account
+  is not subscribed to the API. International schedules are a July snapshot
+  (the summary line says so) until the owner resubscribes and dispatches the
+  workflow. A refused key now shows as a warning on the Actions run.
 - Pipeline changes can only be verified in CI or by a dispatch run. Push to a
   branch first; the workflow commits data back to whatever branch it ran on.

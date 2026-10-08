@@ -26,7 +26,10 @@ const DATA = /*__DATA__*/null;`,
 // be changed under Options; nothing from another airline is ever loaded, so
 // nothing from another airline can be shown.
 const KEY = "esa-airline";
-const CARRIER_LIST = await (await fetch("../data/carriers.json", {cache: "no-cache"})).json();
+// a failed load says so instead of leaving a blank page, then stops the script
+const getJSON = url => fetch(url, {cache: "no-cache"}).then(r => r.ok ? r.json() : Promise.reject())
+  .catch(() => { document.getElementById("summary").textContent = "Could not load the flight data. Reload to try again."; throw new Error(url); });
+const CARRIER_LIST = await getJSON("../data/carriers.json");
 let saved = null;
 try { saved = localStorage.getItem(KEY); } catch(e) {}
 if (!CARRIER_LIST.some(c => c.code === saved)) saved = null;
@@ -40,7 +43,7 @@ if (!saved) {
   });
   try { localStorage.setItem(KEY, saved); } catch(e) {}
 }
-const DATA = await (await fetch("../data/" + saved + ".json", {cache: "no-cache"})).json();
+const DATA = await getJSON("../data/" + saved + ".json");
 {
   const sel = document.getElementById("airlineSel");
   fill(sel); sel.value = saved;
@@ -60,13 +63,8 @@ rep(`  .themebtn{`, `  .brand .airline{font-size:14px;font-weight:400;color:var(
     border-radius:var(--radius);background:var(--surface);color:var(--text);margin-right:10px}
   .themebtn{`, "css");
 
-/* Operators row becomes the Airline row */
+/* the Airline select joins the international toggle's row */
 rep(`          <div class="optrow">
-            <div class="chip-group" id="carGroup">
-              <span class="chip-cap">Operators</span>
-              <button class="chip on" data-car="1" title="Endeavor Air, a wholly owned Delta subsidiary">Endeavor 9E</button>
-              <button class="chip on" data-car="2" title="SkyWest segments apportioned by share marketed as Delta in DOT on-time data">SkyWest (est.)</button>
-            </div>
             <button class="chip" id="intlChip">Include international connections</button>
           </div>`,
 `          <div class="optrow">
@@ -75,22 +73,11 @@ rep(`          <div class="optrow">
             <button class="chip" id="intlChip">Include international connections</button>
           </div>`, "airline row");
 
-rep(`document.getElementById("carGroup").addEventListener("click",e=>{
-  const b=e.target.closest("[data-car]"); if(!b) return;
-  const c=+b.dataset.car;
-  if(state.cars.has(c)) state.cars.delete(c); else state.cars.add(c);
-  b.classList.toggle("on",state.cars.has(c));
-  renderBoard();
-});
-`, ``, "carGroup handler");
-
 /* copy */
-rep(`Operators removes Endeavor or SkyWest flying. Include international connections allows a foreign airport as a connecting point.</p>`,
+rep(`Include international connections allows a foreign airport as a connecting point.</p>`,
     `Airline switches the whole dataset to another carrier; the choice is remembered on this device. Include international connections allows a foreign airport as a connecting point.</p>`, "faq options");
-rep(`    <h4>Where the numbers come from</h4>
-    <p>US Department of Transportation reports: seats and passengers per route per month, and departure and arrival times for domestic flights. International times come from airport departure boards.`,
-`    <h4>Where the numbers come from</h4>
-    <p>US Department of Transportation reports: seats and passengers per route per month, and departure and arrival times for domestic flights. Regional flying (SkyWest, Republic and the like) is split between the airlines that sold it, by each airline's share of that route in the on-time data. International times come from airport departure boards, for Delta only so far.`, "faq source");
+rep(`International times come from airport departure boards;`,
+    `International times come from airport departure boards, for Delta only so far;`, "faq source");
 
 fs.writeFileSync(DST, s);
 console.log("--- wrote " + DST + " ---");
