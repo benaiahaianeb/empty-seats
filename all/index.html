@@ -229,7 +229,7 @@
     <h4>Options</h4>
     <p>Month selects which calendar month the numbers come from; Week interpolates between months. Latest uses the most recent occurrence of that month; 3-year average blends every occurrence. Newest schedule shows days and times from the most recent month in the data; Seasonal shows the viewed month's own, which can be a year old. Airline switches the whole dataset to another carrier; the choice is remembered on this device. Include international connections allows a foreign airport as a connecting point.</p>
     <h4>Tap a row</h4>
-    <p>Opens the full schedule for each leg, departure to arrival. International legs have no arrival data, so an estimated flight time and an estimated arrival are shown, both marked est.</p>
+    <p>Opens the full schedule for each leg, departure to arrival. Where a leg has no arrival data, an estimated flight time and arrival are shown, both marked est.</p>
     <h4>Trip finder</h4>
     <p>Every nonstop and one-stop routing from one airport, by continent. Each destination lists all its routings, emptiest first. Off the beaten path hides the busiest 15% of destinations in each continent.</p>
     <h4>Where the numbers come from</h4>
@@ -962,9 +962,9 @@ function opsOnDay(o, d, dmi, dow){
 // trip finder has no radius, so it passes empty sets and viaOK reduces to the
 // international gate.
 function connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF){
-  // Foreign connecting points sit behind the toggle. Their onward legs carry no
-  // departure times at all in this data, so a connection through one can never
-  // be checked for same-day feasibility - it is offered, not verified.
+  // Foreign connecting points sit behind the toggle. Only legs touching one of
+  // the sampled US gateways carry times, so a connection through one often
+  // cannot be checked for same-day feasibility - it is offered, not verified.
   const usOnly = !state.altIntl;
   const isUS = c => { const i=CODE_IDX.get(c); return i!=null && A[i][2]==="US"; };
   const viaOK = c => !fromSet.has(c) && !toSet.has(c) && (!usOnly || isUS(c));
