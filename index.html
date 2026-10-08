@@ -94,6 +94,7 @@
   .chip-cap{font-size:12px;color:var(--text-secondary);margin-right:2px}
   #altGroup{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 14px;align-items:center;width:100%}
   #altGroup>.chip-cap{text-align:right;white-space:nowrap}
+  #altGroup.trip>:not(.dayctl){display:none} /* trip finder shares only Day */
   @media(max-width:480px){#altGroup{grid-template-columns:1fr;gap:4px 0}
     #altGroup>.chip-cap{text-align:left;margin-top:6px}}
   .howto{margin:0 0 14px;font-size:13px;color:var(--text-secondary)}
@@ -265,8 +266,8 @@
         <button class="chip" data-area="other">Everything else</button>
       </div>
       <div class="chip-group" id="altGroup" style="display:none">
-        <span class="chip-cap">Day</span>
-        <div class="chip-group" id="dowGroup"></div>
+        <span class="chip-cap dayctl">Day</span>
+        <div class="chip-group dayctl" id="dowGroup"></div>
         <span class="chip-cap">Stops</span>
         <div class="chip-group" id="stopsGroup">
           <button class="chip" data-stops="0">Nonstop</button>
@@ -911,9 +912,9 @@ function opsOnDay(o, d, dmi, dow){
   if(!mask || mask===127) return true;
   return !!(mask>>dow & 1);
 }
-// Shared by both connection searches. The trip finder has no day control, so it
-// passes dow -1 and opsOnDay waves every day through; it also has no radius, so
-// it passes empty sets and viaOK reduces to the international gate.
+// Shared by both connection searches. dow -1 (Any) waves every day through. The
+// trip finder has no radius, so it passes empty sets and viaOK reduces to the
+// international gate.
 function connectionHelpers(dmi, sdi, dow, fromSet, toSet, MINF){
   // Foreign connecting points sit behind the toggle. Their onward legs carry no
   // departure times at all in this data, so a connection through one can never
@@ -1164,11 +1165,11 @@ function computeTrips(){
   const MINF = 0.4; // ~3x/week per leg minimum for realistic standby
   // dmi decides whether a route still exists; sdi is the schedule being shown
   const dmi = currentDaysIdx(), sdi = schedIdx();
-  // Same rules as the Alternatives tab, minus the day and radius controls it
-  // does not have: dow -1 accepts every day, and the empty sets leave viaOK as
-  // just the international gate.
+  // Same rules as the flight finder, Day included, minus the radius controls it
+  // does not have: the empty sets leave viaOK as just the international gate.
+  const dow = state.altDow;
   const {viaOK, circuityOK, serOf, legMetric} =
-    connectionHelpers(dmi, sdi, -1, new Set(), new Set(), MINF);
+    connectionHelpers(dmi, sdi, dow, new Set(), new Set(), MINF);
 
   // first leg out of the origin, shared by every destination
   const viaFrom={};
@@ -1189,7 +1190,8 @@ function computeTrips(){
     const code = A[d][0];
     const options = [];
     const direct = metricFromSeries(oSer.get(d));
-    if(direct && direct.fpd>=MINF && !isDeadRoute(direct.fpd,oCode,code,dmi))
+    if(direct && direct.fpd>=MINF && !isDeadRoute(direct.fpd,oCode,code,dmi)
+        && opsOnDay(oCode,code,sdi,dow))
       options.push({legs:[{f:oCode,t:code,m:direct}], bn:direct.open});
     for(const xi of originSeries(d).keys()){
       const xc=A[xi][0];
@@ -1236,6 +1238,7 @@ function renderTrips(){
     const nd = new Set(list.map(r=>r.d)).size;
     sum.innerHTML = "<strong>"+list.length+(list.length===1?" routing":" routings")+"</strong> to "
       +nd+(nd===1?" destination":" destinations")+" from "+oa[0]+" · "+esc(where)
+      +" · "+(state.altDow<0? "any day" : DOW_FULL[state.altDow])
       +" · "+whenTxt+esc(schedNote()+intlNote(list))+(isWeek?' <span class="estbadge">Estimate</span>':"")
       +(state.gemsOnly? " · off the beaten path" : "")
       +" · ranked by tightest leg";
@@ -1422,7 +1425,8 @@ function setView(v){
   document.getElementById("tabAlt").classList.toggle("on",v==="alt");
   document.getElementById("contGroup").style.display = v==="trip"? "":"none";
   syncAreaGroup();
-  document.getElementById("altGroup").style.display = v==="alt"? "":"none";
+  document.getElementById("altGroup").style.display = "";
+  document.getElementById("altGroup").classList.toggle("trip", v==="trip");
   renderBoard();
 }
 document.getElementById("tabTrip").onclick=()=>setView("trip");
