@@ -15,6 +15,9 @@ owner's working folder. This file is the short version.
   has Python but not pandas, so locally only `python -m py_compile` works;
   `.github/workflows/pycheck.yml` compiles and unit-tests it on every push, and
   `refresh.yml` (cron 15th, or dispatch) does the real build.
+- `tools/trips.js` ranks destinations by round-trip time for an out day and a
+  back day (`--help`). Skill: `.claude/skills/rank-trips`. It reimplements the
+  template's leg rules; if those change, change both.
 - `data/<code>.json` per airline, `data/carriers.json`, and the CSVs the
   pipeline keeps between runs. Committed by the workflow.
 
