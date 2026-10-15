@@ -299,6 +299,7 @@ JNB,Africa/Johannesburg
 JNU,America/Anchorage
 JST,America/New_York
 KEF,Atlantic/Reykjavik
+KHH,Asia/Taipei
 KIN,America/Jamaica
 KIX,Asia/Tokyo
 KOA,Pacific/Honolulu
@@ -337,6 +338,7 @@ LRM,America/Santo_Domingo
 LRU,America/Denver
 LSE,America/Chicago
 LTO,America/Mazatlan
+LUF,America/Phoenix
 LUX,Europe/Luxembourg
 LWS,America/Los_Angeles
 LYH,America/New_York
@@ -345,6 +347,7 @@ MAF,America/Chicago
 MAJ,Pacific/Majuro
 MAN,Europe/London
 MAO,America/Boa_Vista
+MAR,America/Caracas
 MBJ,America/Jamaica
 MBS,America/New_York
 MCI,America/Chicago
